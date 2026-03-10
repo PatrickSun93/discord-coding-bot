@@ -7,8 +7,8 @@ const {
   Partials,
 } = require('discord.js');
 const env = require('./config/env');
-const { splitMessage } = require('./core/utils');
 const { userCwds, userBackends, enqueueForUser } = require('./core/state');
+const { DiscordReplyStreamer } = require('./core/discordStreamer');
 const { callBackend } = require('./backends');
 
 if (!env.discordToken) {
@@ -38,13 +38,6 @@ function getCurrentCwd(userId) {
 
 function getCurrentBackend(userId) {
   return userBackends.get(userId) || env.defaultBackend;
-}
-
-async function replyLong(message, text) {
-  const chunks = splitMessage(text);
-  for (const chunk of chunks) {
-    await message.reply(chunk);
-  }
 }
 
 client.on(Events.MessageCreate, async (message) => {
@@ -114,12 +107,20 @@ client.on(Events.MessageCreate, async (message) => {
   enqueueForUser(message.author.id, async () => {
     const cwd = getCurrentCwd(message.author.id);
     const backend = getCurrentBackend(message.author.id);
+    const streamer = new DiscordReplyStreamer(message, {
+      prefix: `Running on backend \`${backend}\` in \`${cwd}\` ...\n\n`,
+    });
 
     try {
-      await message.channel.send(`Running on backend \`${backend}\` in \`${cwd}\` ...`);
-      const output = await callBackend({ backend, prompt: userMessage, cwd });
-      await replyLong(message, output);
+      const output = await callBackend({
+        backend,
+        prompt: userMessage,
+        cwd,
+        onChunk: (chunk) => streamer.append(chunk),
+      });
+      await streamer.finalize(output);
     } catch (err) {
+      await streamer.flushNow().catch(() => {});
       await message.reply(`Backend error: ${err.message}`);
     }
   });

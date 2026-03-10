@@ -4,7 +4,7 @@ A fresh Discord bot scaffold for routing messages to coding backends like **Code
 
 ## Current status
 
-This is a clean-start scaffold.
+This is a clean-start scaffold with progressive Discord streaming.
 
 Supported backend switches:
 - `codex`
@@ -51,11 +51,15 @@ npm start
 
 ## Notes
 
-- This scaffold is intentionally simple.
 - Backend invocation is abstracted under `src/backends/`.
-- Next steps should be:
-  - proper streaming output
-  - session persistence
-  - backend-specific argument handling
-  - better Codex CLI integration
-  - Claude Code adapter if needed
+- Progressive Discord output is driven by shared CLI streaming logic and throttled message edits.
+- Long responses are split across multiple Discord messages when needed.
+- Current streaming is stdout-based. If a backend only emits a final response, the user will still see a final answer but not token-by-token progress.
+
+## Next sensible steps
+
+- backend-specific argument handling
+- session persistence
+- better Codex CLI integration
+- Claude Code adapter if needed
+- optional stderr/status streaming

@@ -1,24 +1,12 @@
-const { spawn } = require('child_process');
 const { geminiCmd } = require('../config/env');
+const { runCliBackend } = require('./cli');
 
-function callGemini(prompt, cwd) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(geminiCmd, ['-p', prompt], {
-      cwd,
-      env: process.env,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-
-    let stdout = '';
-    let stderr = '';
-
-    child.stdout.on('data', (d) => (stdout += d.toString()));
-    child.stderr.on('data', (d) => (stderr += d.toString()));
-    child.on('error', reject);
-    child.on('close', (code) => {
-      if (code === 0) return resolve(stdout.trim() || '(empty output)');
-      reject(new Error(stderr.trim() || `Gemini exited with code ${code}`));
-    });
+function callGemini(prompt, cwd, options = {}) {
+  return runCliBackend({
+    command: geminiCmd,
+    args: ['-p', prompt],
+    cwd,
+    onChunk: options.onChunk,
   });
 }
 
