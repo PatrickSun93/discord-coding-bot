@@ -54,7 +54,8 @@ npm start
 - Backend invocation is abstracted under `src/backends/`.
 - Progressive Discord output is driven by shared CLI streaming logic and throttled message edits.
 - Long responses are split across multiple Discord messages when needed.
-- Current streaming is stdout-based. If a backend only emits a final response, the user will still see a final answer but not token-by-token progress.
+- Current streaming is stdout-chunk based, not token streaming.
+- Whether output feels truly streamed depends on how the backend CLI emits stdout. If a backend only emits a final response, the user will still only see a final answer.
 
 ## Next sensible steps
 

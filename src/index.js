@@ -120,8 +120,7 @@ client.on(Events.MessageCreate, async (message) => {
       });
       await streamer.finalize(output);
     } catch (err) {
-      await streamer.flushNow().catch(() => {});
-      await message.reply(`Backend error: ${err.message}`);
+      await streamer.fail(err.message).catch(() => {});
     }
   });
 });

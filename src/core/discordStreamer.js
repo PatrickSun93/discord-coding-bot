@@ -7,6 +7,7 @@ class DiscordReplyStreamer {
     this.updateIntervalMs = options.updateIntervalMs || 1200;
     this.messages = [];
     this.buffer = '';
+    this.statusSuffix = '';
     this.flushTimer = null;
     this.flushing = Promise.resolve();
   }
@@ -39,6 +40,15 @@ class DiscordReplyStreamer {
     if (typeof finalText === 'string') {
       this.buffer = finalText;
     }
+    this.statusSuffix = '';
+    await this.flushNow();
+  }
+
+  async fail(errorMessage) {
+    const trimmedError = (errorMessage || 'Unknown backend error').trim();
+    this.statusSuffix = this.buffer.trim()
+      ? `\n\n---\n⚠️ Partial output above. Backend error: ${trimmedError}`
+      : `\n\n⚠️ Backend error: ${trimmedError}`;
     await this.flushNow();
   }
 
@@ -48,7 +58,8 @@ class DiscordReplyStreamer {
   }
 
   async syncMessages() {
-    const content = `${this.prefix}${this.buffer || '(no output yet)'}`;
+    const body = this.buffer || '(no output yet)';
+    const content = `${this.prefix}${body}${this.statusSuffix}`;
     const chunks = splitMessage(content);
 
     for (let i = 0; i < chunks.length; i += 1) {
