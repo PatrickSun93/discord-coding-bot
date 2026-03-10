@@ -1,10 +1,12 @@
 # Discord Coding Bot
 
-A fresh Discord bot scaffold for routing messages to coding backends like **Codex** and **Gemini CLI**.
+> Languages: **English** | [简体中文](docs/readme/README.zh-CN.md) | [Español](docs/readme/README.es.md)
+
+A Discord bot scaffold for routing messages to coding backends like **Codex** and **Gemini CLI**.
 
 ## Current status
 
-This is a clean-start scaffold with progressive Discord streaming.
+This is a simple scaffold with progressive Discord streaming.
 
 Supported backend switches:
 - `codex`
@@ -23,7 +25,7 @@ Any non-command message is forwarded to the selected backend.
 
 ## Setup
 
-1. Copy env file:
+1. Copy the env file:
 
 ```bash
 cp .env.example .env
@@ -57,8 +59,14 @@ npm start
 - Long responses are split across multiple Discord messages when needed.
 - Current streaming is stdout-chunk based, not token streaming.
 - Whether output feels truly streamed depends on how the backend CLI emits stdout. If a backend only emits a final response, the user will still only see a final answer.
-- Codex now defaults to `codex exec --full-auto <prompt>` for a more practical non-interactive invocation.
-- Codex also checks that the selected working directory is inside a git repository before launching, because Codex commonly expects a trusted repo context.
+- Codex defaults to `codex exec --full-auto <prompt>` for a practical non-interactive invocation.
+- Codex checks that the selected working directory is inside a git repository before launching, because Codex commonly expects a trusted repo context.
+
+## Multilingual docs
+
+- The root `README.md` is the primary source.
+- Translations live under `docs/readme/`.
+- When behavior changes, update the English README first, then sync translations.
 
 ## Next sensible steps
 
