@@ -35,6 +35,7 @@ cp .env.example .env
 - `DEFAULT_BACKEND`
 - `DEFAULT_WORKDIR`
 - `CODEX_CMD`
+- optional `CODEX_ARGS` (defaults to `exec --full-auto`)
 - `GEMINI_CMD`
 
 3. Install:
@@ -56,6 +57,8 @@ npm start
 - Long responses are split across multiple Discord messages when needed.
 - Current streaming is stdout-chunk based, not token streaming.
 - Whether output feels truly streamed depends on how the backend CLI emits stdout. If a backend only emits a final response, the user will still only see a final answer.
+- Codex now defaults to `codex exec --full-auto <prompt>` for a more practical non-interactive invocation.
+- Codex also checks that the selected working directory is inside a git repository before launching, because Codex commonly expects a trusted repo context.
 
 ## Next sensible steps
 
