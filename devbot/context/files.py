@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import yaml
+
 if TYPE_CHECKING:
     from devbot.config.settings import ProjectConfig
 
@@ -43,6 +45,16 @@ def _dedupe_paths(paths: list[Path]) -> list[Path]:
     return unique
 
 
+def _load_devbot_overrides(project_path: str) -> dict:
+    override_path = Path(project_path) / ".devbot.yaml"
+    if not override_path.is_file():
+        return {}
+    try:
+        return yaml.safe_load(override_path.read_text(encoding="utf-8")) or {}
+    except Exception:
+        return {}
+
+
 def resolve_project_files(
     project_path: str,
     patterns: list[str],
@@ -77,13 +89,19 @@ def select_analysis_files(
     file_hints: list[str] | None = None,
     max_files: int = 8,
 ) -> list[Path]:
+    overrides = _load_devbot_overrides(project_path)
+    analysis_overrides = overrides.get("analysis", {}) if isinstance(overrides, dict) else {}
+
     explicit = resolve_project_files(project_path, file_hints or [], max_files=max_files)
     if explicit:
         return explicit
 
     goal_lower = goal.lower()
     patterns: list[str] = []
-    patterns.extend(project_cfg.analysis.entry_files)
+    patterns.extend(
+        [str(v) for v in analysis_overrides.get("entry_files", []) if str(v).strip()]
+        or project_cfg.analysis.entry_files
+    )
 
     if any(word in goal_lower for word in ("workflow", "architecture", "design", "evaluate", "analysis")):
         patterns.extend(project_cfg.docs.architecture)
@@ -93,7 +111,10 @@ def select_analysis_files(
     patterns.extend(project_cfg.docs.agent_context)
     patterns.extend(project_cfg.docs.product)
     patterns.extend(project_cfg.context_files)
-    patterns.extend(project_cfg.analysis.doc_globs)
+    patterns.extend(
+        [str(v) for v in analysis_overrides.get("doc_globs", []) if str(v).strip()]
+        or project_cfg.analysis.doc_globs
+    )
     patterns.extend(_DEFAULT_DOC_GLOBS)
 
     return resolve_project_files(project_path, patterns, max_files=max_files)

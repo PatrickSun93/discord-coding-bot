@@ -444,7 +444,7 @@ Shell default: {_shell_rules(os_name, available_shells)}
 CLI agents installed: {', '.join(installed_clis) or 'none detected'}
 
 == PROJECTS ===============================================================
-(use run_cli or read_context for these)
+(use run_cli, read_context, read_files, or analyze_project for these)
 {_build_projects_section(config)}
 
 == SERVICES ===============================================================
@@ -461,25 +461,41 @@ CLI agents installed: {', '.join(installed_clis) or 'none detected'}
 Classify the user's intent, then pick the tool:
 
   OPERATIONAL  -> run_shell
-    Signals: start, stop, restart, status, logs, deploy, kill, check, run,
-             git *, docker *, npm *, pip *, test, build, install
-    LITERAL COMMAND RULE (highest priority):
-      If the user says "run <X> in <shell>" or "run <X>", treat <X> as the
-      exact verbatim command. Pass it directly as command=, do not interpret it.
-      Example: "run openclaw gateway restart in WSL"
-               -> command="openclaw gateway restart", shell="wsl"
-      Example: "run git status"
-               -> command="git status"
-    SERVICES TABLE (second priority):
-      If the user mentions a service verb (start/stop/restart/status/logs) on a
-      name that IS in the SERVICES table above: copy its exact command.
-    BEST-GUESS (fallback when no table match and no literal "run" prefix):
-      Construct a command from the name + action -- do NOT ask for clarification.
-    The shell= field should match what the user specified ("wsl", "bash", etc.).
+    Use whenever the user wants to execute, run, restart, start, stop, check,
+    deploy, or invoke any CLI tool or system command.
+
+    COMMAND EXTRACTION -- apply this first, always:
+      The user's message is natural language wrapped around a command. Strip the
+      wrapper, keep the core command tokens verbatim. Do NOT interpret, expand,
+      or paraphrase the command string.
+
+      All of these extract the same command "openclaw gateway restart":
+        "run openclaw gateway restart in WSL"
+        "help me run openclaw gateway restart"
+        "can you run openclaw gateway restart in WSL"
+        "execute openclaw gateway restart"
+        "openclaw gateway restart in WSL please"
+        "help me run the openclaw gateway restart in WSL"
+
+      Extraction rule: remove filler words ("help me", "can you", "please",
+      "I want to", "in WSL", "in bash", shell names, politeness), keep the
+      remaining tokens as the command string exactly as-is.
+
+    SHELL DETECTION from user message:
+      "in WSL" / "wsl" -> shell="wsl"
+      "in bash"        -> shell="bash"
+      "in powershell"  -> shell="powershell"
+      "in cmd"         -> shell="cmd"
+      nothing stated   -> shell="auto"
+
+    SERVICES TABLE -- only when user gives NO explicit command tokens:
+      If the user says something vague like "restart openclaw" (no multi-token
+      command) AND it matches a service in the SERVICES table, copy that service's
+      configured command. Otherwise use the extracted tokens directly.
 
   CODE TASK    -> run_cli
     Signals: fix, add, implement, refactor, debug, write code,
-              generate, edit file, add feature, add tests
+             generate, edit file, add feature, add tests
     Requires a project name or path.
 
   ANALYZE      -> analyze_project
@@ -497,13 +513,9 @@ Classify the user's intent, then pick the tool:
     Signals: list projects, what projects, show projects
 
   AMBIGUOUS    -> ask_clarification
-    LAST RESORT only -- when it is literally impossible to attempt the task
-    without more info (e.g. user says "fix it" with zero context).
-    DO NOT ask when:
-      - A service name + action are both present (construct a best-guess command)
-      - A shell is mentioned (use it)
-      - The request is an operational verb on a named thing
-    Example: "restart openclaw gateway in WSL" -> run_shell, do NOT ask.
+    LAST RESORT -- only when it is literally impossible to proceed without more
+    info (e.g. "fix it" with zero context, no command tokens, no project named).
+    Any message that contains command-like tokens -> use run_shell, do not ask.
 
   CHAT         -> (no tool call, reply directly)
     Signals: questions, explanations, how-to, what-is, why-does
