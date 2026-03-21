@@ -1,3 +1,4 @@
+
 # DevBot — Discord AI Development Assistant
 
 DevBot is a self-hosted Discord bot that acts as an AI-powered coding assistant. Send a natural language message in Discord; a router LLM (MiniMax, with Ollama fallback) interprets your intent, picks the right tool, and runs it against your local projects. Output streams back to Discord in real time.

@@ -65,3 +65,7 @@ desktop.ini
 .dmypy.json
 .pytype/
 .ruff_cache/
+
+# ── Node (legacy scaffold) ───────────────────────────
+node_modules/
+.sessions/
