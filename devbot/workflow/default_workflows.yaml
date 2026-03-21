@@ -1,0 +1,19 @@
+analysis:
+  description: "Read project artifacts and produce an assessment."
+  stages: ["reviewer"]
+  default_entry_role: "reviewer"
+
+code_review:
+  description: "Review an implementation and then validate test/QA concerns."
+  stages: ["reviewer", "qa"]
+  default_entry_role: "reviewer"
+
+investigation:
+  description: "Investigate a failure before deciding on changes."
+  stages: ["investigator", "reviewer"]
+  default_entry_role: "investigator"
+
+feature_delivery:
+  description: "Plan, build, review, QA, and release a feature."
+  stages: ["planner", "coder", "reviewer", "qa", "release"]
+  default_entry_role: "planner"

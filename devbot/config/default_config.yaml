@@ -1,0 +1,136 @@
+# DevBot default configuration (v4)
+# Copy to the config dir shown by: python -c "import platformdirs; print(platformdirs.user_config_dir('devbot'))"
+# and fill in your values.
+
+# ── Messaging ────────────────────────────────────────
+discord:
+  token: "${DISCORD_BOT_TOKEN}"
+  owner_id: "${DISCORD_OWNER_ID}"
+  channel_id: ""  # optional: restrict to one channel ID, leave empty for all
+
+# ── LLM Router ───────────────────────────────────────
+llm:
+  primary:
+    provider: "minimax"
+    base_url: "https://api.minimaxi.com/anthropic"
+    api_key: "${MINIMAX_API_KEY}"
+    model: "MiniMax-M2.7"
+  fallback:
+    provider: "ollama"
+    base_url: "http://localhost:11434/v1"
+    model: "qwen2.5:14b"  # run: ollama pull qwen2.5:14b
+
+# ── CLI Agents ───────────────────────────────────────
+cli:
+  claude_code:
+    command: "claude"
+    base_args: ["-p", "--output-format", "stream-json"]
+    autonomy_args: ["--dangerously-skip-permissions"]
+    extra_args: []
+    timeout: 600
+    enabled: true
+    roles: ["coder"]
+
+  codex:
+    command: "codex"
+    base_args: ["exec", "--json"]
+    autonomy_args: ["--full-auto"]
+    extra_args: []
+    timeout: 600
+    enabled: true
+    roles: ["coder"]
+
+  gemini_cli:
+    command: "gemini"
+    base_args: ["-p", "--output-format", "stream-json"]
+    autonomy_args: ["--yolo"]
+    extra_args: []
+    timeout: 600
+    enabled: true
+    roles: ["reviewer", "tester"]
+
+  qwen_cli:
+    command: "qwen"
+    base_args: ["-p", "--output-format", "stream-json"]
+    autonomy_args: ["--yolo"]
+    extra_args: []
+    timeout: 600
+    enabled: true
+    roles: ["reviewer"]
+
+# ── Shell ────────────────────────────────────────────
+shell:
+  default: "auto"   # auto | bash | zsh | wsl | powershell | cmd
+  timeout: 300
+  wsl_distro: null  # specific WSL distro, or null for default
+
+# ── Services (managed via shell) ─────────────────────
+# Named services with pre-configured shell commands.
+# The LLM will use these exact commands when you say "restart openclaw" etc.
+services: {}
+#  openclaw:
+#    shell: "wsl"
+#    commands:
+#      start:   "cd ~/openclaw && npm start"
+#      stop:    "cd ~/openclaw && npm stop"
+#      restart: "cd ~/openclaw && npm restart"
+#      status:  "cd ~/openclaw && npm run status"
+#      logs:    "tail -50 ~/openclaw/logs/openclaw.log"
+
+# ── Projects ─────────────────────────────────────────
+projects: {}
+#  myapp:
+#    path: "/home/user/projects/myapp"
+#    type: "webapp"
+#    description: "Main web application"
+#    context_files: ["CLAUDE.md", "AGENTS.md", "README.md"]
+#    docs:
+#      product: ["README.md", "docs/product/**/*.md"]
+#      architecture: ["ARCHITECTURE.md", "*architecture*.md", "docs/architecture/**/*.md"]
+#      agent_context: ["CLAUDE.md", "AGENTS.md", "GEMINI.md"]
+#    commands:
+#      install: "npm install"
+#      test: "npm test"
+#      smoke: ["npm run lint", "npm run test:smoke"]
+#      run: "npm run dev"
+#    qa:
+#      kind: "web"
+#      smoke_commands: ["npm run test:e2e"]
+#      targets: ["https://staging.myapp.com"]
+#    analysis:
+#      entry_files: ["ARCHITECTURE.md", "docs/current-workflow.md"]
+#      doc_globs: ["docs/**/*.md", "*.md"]
+#      preferred_reviewer_cli: "gemini_cli"
+#    role_preferences:
+#      planner: "gemini_cli"
+#      coder: "claude_code"
+#      reviewer: "qwen_cli"
+
+# ── Team Roles / Workflows ───────────────────────────
+# Extend these with new roles or workflow definitions without changing code.
+team_roles: {}
+#  security_reviewer:
+#    purpose: "Audit security-sensitive changes."
+#    capabilities: ["security", "review"]
+#    preferred_clis: ["gemini_cli", "qwen_cli"]
+#    inputs: ["diff", "plan", "project_context"]
+#    outputs: ["security_report"]
+#    allowed_tools: ["read_files", "analyze_project"]
+#    success_to: ["qa"]
+#    failure_to: ["coder"]
+
+workflows: {}
+#  security_audit:
+#    description: "Review a project from a security perspective."
+#    stages: ["security_reviewer", "qa"]
+#    default_entry_role: "security_reviewer"
+
+# ── Context Refresh ──────────────────────────────────
+context:
+  max_age_days: 7   # re-run /init if CLAUDE.md older than this
+
+# ── Reporting ────────────────────────────────────────
+reporter:
+  stream_threshold: 30    # seconds before switching to batch mode
+  batch_interval: 15      # seconds between batch progress updates
+  max_message_length: 1900

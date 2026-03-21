@@ -1,0 +1,67 @@
+# ── Python ───────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+wheels/
+
+# ── Virtual environments ─────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+
+# ── Packaging / editable installs ────────────────────
+*.egg-info/
+pip-wheel-metadata/
+MANIFEST
+
+# ── Environment & secrets ────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets.yaml
+secrets.yml
+
+# ── DevBot config (contains tokens) ─────────────────
+# Don't commit the live config — only the template in devbot/config/
+config.yaml
+
+# ── Test / coverage artifacts ────────────────────────
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+*.log
+pytest.ini
+junit*.xml
+
+# ── IDEs ─────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ── OS ───────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Jupyter / notebooks ──────────────────────────────
+.ipynb_checkpoints/
+*.ipynb
+
+# ── mypy / type checkers ─────────────────────────────
+.mypy_cache/
+.dmypy.json
+.pytype/
+.ruff_cache/

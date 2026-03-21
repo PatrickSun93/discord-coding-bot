@@ -1,0 +1,59 @@
+planner:
+  purpose: "Clarify goals, shape scope, and write the execution plan."
+  capabilities: ["planning", "architecture", "scope"]
+  preferred_clis: ["gemini_cli", "qwen_cli", "codex", "claude_code"]
+  inputs: ["project_profile", "docs", "request"]
+  outputs: ["brief", "plan"]
+  allowed_tools: ["read_files", "analyze_project"]
+  success_to: ["coder", "reviewer"]
+  failure_to: ["investigator"]
+
+coder:
+  purpose: "Implement code changes and keep the repo moving."
+  capabilities: ["implementation", "refactor", "tests"]
+  preferred_clis: ["claude_code", "codex"]
+  inputs: ["brief", "plan", "project_context"]
+  outputs: ["changes", "implementation_notes"]
+  allowed_tools: ["run_cli", "read_files"]
+  success_to: ["reviewer", "qa"]
+  failure_to: ["investigator"]
+
+reviewer:
+  purpose: "Find correctness, risk, and completeness issues."
+  capabilities: ["review", "analysis", "risk"]
+  preferred_clis: ["gemini_cli", "qwen_cli", "codex", "claude_code"]
+  inputs: ["plan", "diff", "project_context"]
+  outputs: ["review_report"]
+  allowed_tools: ["read_files", "analyze_project"]
+  success_to: ["qa", "release"]
+  failure_to: ["coder", "investigator"]
+
+qa:
+  purpose: "Verify behavior, test paths, and capture ship-readiness issues."
+  capabilities: ["qa", "verification", "test-analysis"]
+  preferred_clis: ["gemini_cli", "qwen_cli", "codex"]
+  inputs: ["changes", "review_report", "qa_targets"]
+  outputs: ["qa_report"]
+  allowed_tools: ["read_files", "run_shell", "analyze_project"]
+  success_to: ["release"]
+  failure_to: ["coder", "investigator"]
+
+release:
+  purpose: "Assess readiness to merge or ship."
+  capabilities: ["release", "merge-readiness", "docs-check"]
+  preferred_clis: ["codex", "claude_code", "gemini_cli"]
+  inputs: ["review_report", "qa_report", "project_commands"]
+  outputs: ["release_report"]
+  allowed_tools: ["read_files", "run_shell", "analyze_project"]
+  success_to: []
+  failure_to: ["coder", "reviewer", "qa"]
+
+investigator:
+  purpose: "Debug root cause before any risky fix."
+  capabilities: ["debugging", "investigation", "triage"]
+  preferred_clis: ["codex", "claude_code", "gemini_cli"]
+  inputs: ["symptoms", "logs", "project_context"]
+  outputs: ["investigation_report"]
+  allowed_tools: ["read_files", "run_shell", "analyze_project"]
+  success_to: ["coder", "reviewer"]
+  failure_to: []
