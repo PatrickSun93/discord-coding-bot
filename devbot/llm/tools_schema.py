@@ -495,13 +495,27 @@ Classify the user's intent, then pick the tool:
 
   CODE TASK    -> run_cli
     Signals: fix, add, implement, refactor, debug, write code,
-             generate, edit file, add feature, add tests
+             generate, edit file, add feature, add tests, investigate and fix,
+             look into and resolve, figure out and fix
     Requires a project name or path.
+    EXPLICIT CLI RULE (highest priority — overrides everything else):
+      If the user names a CLI agent anywhere in the message, always use run_cli
+      with that CLI. Examples:
+        "claude code, fix the auth bug"         -> cli=claude_code
+        "use claude to investigate this error"  -> cli=claude_code
+        "claude code I need you to work on X"   -> cli=claude_code
+        "use codex to refactor Y"               -> cli=codex
+        "gemini, review this"                   -> cli=gemini_cli
+      Named CLI agents: "claude", "claude code" -> claude_code
+                        "codex"                 -> codex
+                        "gemini"                -> gemini_cli
+                        "qwen"                  -> qwen_cli
 
   ANALYZE      -> analyze_project
     Signals: evaluate, analyze, assess, critique, review architecture,
              review workflow, review design, find risks, audit completeness
-    Use when the main deliverable is an assessment, not code changes.
+    Use when the main deliverable is an assessment report, not code changes.
+    Do NOT use if the user names a specific CLI agent -- use run_cli instead.
 
   READ DOCS    -> read_context or read_files
     Signals: show context, read CLAUDE.md / AGENTS.md / README,

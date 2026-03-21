@@ -1,0 +1,14 @@
+{
+  "run_id": "20260321-124800-fix-the-discord-coding-bot-project-so-that-the-c",
+  "workflow": "ad_hoc",
+  "role": "coder",
+  "goal": "Fix the discord-coding-bot project so that the coding CLI can work in parallel on different projects. Currently only 1 CLI is working on one project at a time. This is the highest priority task.\n\nInvestigate the current architecture and implementation to understand:\n1. How projects are currently locked/assigned to a single CLI\n2. Why parallel processing isn't working across different projects\n3. What needs to change to allow multiple CLIs to work on different projects simultaneously\n\nThen implement the fix to enable true parallel processing of different projects.",
+  "project_name": "discord-coding-bot",
+  "project_path": "D:\\devitems\\discord-coding-bot",
+  "started_at": "2026-03-21T19:48:00Z",
+  "metadata": {
+    "cli": "claude_code",
+    "source": "run_cli",
+    "files": []
+  }
+}

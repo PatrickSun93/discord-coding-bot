@@ -1,0 +1,6 @@
+- CLAUDE.md
+- README.md
+- docs/readme/README.es.md
+- docs/readme/README.zh-CN.md
+- CONTRIBUTING.md
+- devbot-architecture-v4-final.md

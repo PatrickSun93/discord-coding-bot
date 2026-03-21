@@ -1,0 +1,1 @@
+[error] Command not found: 'claude' — is it installed and on PATH?

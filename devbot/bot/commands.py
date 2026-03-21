@@ -22,19 +22,22 @@ logger = logging.getLogger(__name__)
 def register_commands(bot: "DevBotClient") -> None:
     tree = bot.tree
 
-    @tree.command(name="status", description="Show the current task status.")
+    @tree.command(name="status", description="Show all currently running tasks.")
     async def status_cmd(interaction: discord.Interaction) -> None:
-        msg = format_status(bot.task_manager.current_info(), bot.task_manager.is_busy())
+        msg = format_status(bot.task_manager.all_tasks())
         await interaction.response.send_message(msg, ephemeral=True)
 
-    @tree.command(name="cancel", description="Cancel the currently running task.")
-    async def cancel_cmd(interaction: discord.Interaction) -> None:
+    @tree.command(name="cancel", description="Cancel a running task. Omit project to cancel all.")
+    @app_commands.describe(project="Project name to cancel (leave blank to cancel all)")
+    async def cancel_cmd(interaction: discord.Interaction, project: str = "") -> None:
         if interaction.user.id != bot.config.discord.owner_id:
             await interaction.response.send_message("⛔ Not authorized.", ephemeral=True)
             return
-        cancelled = await bot.task_manager.cancel()
+        project_arg = project.strip() or None
+        cancelled = await bot.task_manager.cancel(project_arg)
         if cancelled:
-            await interaction.response.send_message("🛑 Task cancelled.", ephemeral=False)
+            target = f"`{project_arg}`" if project_arg else "all tasks"
+            await interaction.response.send_message(f"🛑 Cancelled {target}.", ephemeral=False)
         else:
             await interaction.response.send_message("Nothing is running.", ephemeral=True)
 

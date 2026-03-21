@@ -1,4 +1,4 @@
-"""Task lifecycle manager — single task at a time."""
+"""Task lifecycle manager — per-project concurrent tasks."""
 
 from __future__ import annotations
 
@@ -44,14 +44,24 @@ class TaskResult:
 class TaskManager:
     def __init__(self, config: "Config"):
         self.config = config
-        self._current: TaskInfo | None = None
-        self._process: asyncio.subprocess.Process | None = None
+        self._tasks: dict[str, TaskInfo] = {}
+        self._processes: dict[str, asyncio.subprocess.Process] = {}
 
-    def is_busy(self) -> bool:
-        return self._current is not None
+    def is_busy(self, project: str | None = None) -> bool:
+        """Return True if a task is running. If project given, checks only that project."""
+        if project is not None:
+            return project in self._tasks
+        return bool(self._tasks)
 
-    def current_info(self) -> TaskInfo | None:
-        return self._current
+    def current_info(self, project: str | None = None) -> TaskInfo | None:
+        """Return TaskInfo for a specific project, or the first running task if None."""
+        if project is not None:
+            return self._tasks.get(project)
+        return next(iter(self._tasks.values()), None)
+
+    def all_tasks(self) -> dict[str, TaskInfo]:
+        """Return a snapshot of all currently running tasks keyed by project name."""
+        return dict(self._tasks)
 
     async def execute(
         self,
@@ -61,12 +71,12 @@ class TaskManager:
         project_name: str,
         channel: discord.abc.Messageable,
     ) -> TaskResult:
-        if self.is_busy():
-            raise RuntimeError("A task is already running.")
+        if self.is_busy(project_name):
+            raise RuntimeError(f"A task is already running for project '{project_name}'.")
 
         cmd = adapter.build_command(task, project_path)
         info = TaskInfo(cli_name=adapter.name, project=project_name, task=task)
-        self._current = info
+        self._tasks[project_name] = info
 
         streamer = DiscordStreamer(
             channel=channel,
@@ -91,7 +101,7 @@ class TaskManager:
                 cwd=project_path,
                 on_output=json_handler,
                 timeout=timeout,
-                on_process=lambda p: setattr(self, "_process", p),
+                on_process=lambda p: self._processes.__setitem__(project_name, p),
             )
         except Exception as exc:
             logger.exception("Task raised an exception: %s", exc)
@@ -99,8 +109,8 @@ class TaskManager:
             await streamer.on_output(f"Internal error: {exc}")
         finally:
             duration = info.elapsed()
-            self._current = None
-            self._process = None
+            self._tasks.pop(project_name, None)
+            self._processes.pop(project_name, None)
 
         try:
             record_task(
@@ -126,8 +136,18 @@ class TaskManager:
             duration=duration,
         )
 
-    async def cancel(self) -> bool:
-        if not self.is_busy() or self._process is None:
+    async def cancel(self, project: str | None = None) -> bool:
+        """Cancel a specific project's task, or all running tasks if project is None."""
+        if project is not None:
+            proc = self._processes.get(project)
+            if proc is None:
+                return False
+            await kill_process(proc)
+            return True
+
+        if not self._processes:
             return False
-        await kill_process(self._process)
+
+        for proc in list(self._processes.values()):
+            await kill_process(proc)
         return True

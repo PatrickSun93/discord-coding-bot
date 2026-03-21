@@ -16,7 +16,7 @@ class ClaudeCodeAdapter(BaseCLIAdapter):
         extra_args: list[str] | None = None,
     ):
         self.command = command
-        self.base_args = base_args if base_args is not None else ["-p", "--output-format", "stream-json"]
+        self.base_args = base_args if base_args is not None else ["-p", "--output-format", "stream-json", "--verbose"]
         self.autonomy_args = autonomy_args if autonomy_args is not None else ["--dangerously-skip-permissions"]
         self.extra_args = extra_args or []
 

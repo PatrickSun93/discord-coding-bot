@@ -60,6 +60,25 @@ def _clip(text: str, limit: int = 1800) -> str:
     return text[: limit - 3] + "..."
 
 
+def _split_chunks(text: str, chunk_size: int = 1800) -> list[str]:
+    """Split text into chunks at line boundaries, each <= chunk_size chars."""
+    if len(text) <= chunk_size:
+        return [text]
+    chunks: list[str] = []
+    current: list[str] = []
+    current_len = 0
+    for line in text.splitlines(keepends=True):
+        if current_len + len(line) > chunk_size and current:
+            chunks.append("".join(current))
+            current = []
+            current_len = 0
+        current.append(line)
+        current_len += len(line)
+    if current:
+        chunks.append("".join(current))
+    return chunks
+
+
 def _format_file_list(files: list[str]) -> str:
     if not files:
         return "(none)"
@@ -131,10 +150,6 @@ class DevBotClient(discord.Client):
 
         content = message.content.strip()
         if not content:
-            return
-
-        if self.task_manager.is_busy():
-            await message.reply("⏳ A task is already running. Use `/cancel` to stop it.")
             return
 
         await _react(message, _REACT_THINKING)
@@ -228,6 +243,13 @@ class DevBotClient(discord.Client):
             return
         project_path, project_name = resolved
         project_cfg = self._project_profile(project_name, project_path)
+
+        if self.task_manager.is_busy(project_name):
+            await _clear_reaction(message, _REACT_THINKING, self.user)
+            await message.reply(
+                f"⏳ A task is already running for `{project_name}`. Use `/cancel {project_name}` to stop it."
+            )
+            return
 
         cli_cfg = getattr(self.config.cli, cli_key, None)
         if cli_cfg is None:
@@ -323,11 +345,17 @@ class DevBotClient(discord.Client):
 
         success = result.returncode == 0
         icon = "✅" if success else "❌"
-        output = _clip(result.output or "(no output)")
+        output = result.output or "(no output)"
 
         await _clear_reaction(message, _REACT_THINKING, self.user)
         await _react(message, _REACT_OK if success else _REACT_ERROR)
-        await message.reply(f"{icon} Exit `{result.returncode}`\n```\n{output}\n```")
+
+        chunks = _split_chunks(output)
+        for i, chunk in enumerate(chunks):
+            header = f"{icon} Exit `{result.returncode}`\n" if i == 0 else ""
+            await message.reply(f"{header}```\n{chunk}\n```")
+            if i < len(chunks) - 1:
+                await asyncio.sleep(1)
 
     async def _read_context(self, message: discord.Message, args: dict) -> None:
         project_arg = args.get("project", "")
@@ -404,6 +432,13 @@ class DevBotClient(discord.Client):
         project_path, project_name = resolved
         project_cfg = self._project_profile(project_name, project_path)
 
+        if self.task_manager.is_busy(project_name):
+            await _clear_reaction(message, _REACT_THINKING, self.user)
+            await message.reply(
+                f"⏳ A task is already running for `{project_name}`. Use `/cancel {project_name}` to stop it."
+            )
+            return
+
         selected_paths = select_analysis_files(
             project_path=project_path,
             project_cfg=project_cfg,
@@ -422,18 +457,25 @@ class DevBotClient(discord.Client):
             project_name=project_name,
             preferred_cli=reviewer_cli,
         )
-        cli_cfg = getattr(self.config.cli, cli_key, None)
-        adapter = _build_adapter(cli_key, self.config)
+        # Fall back through available CLIs: selected -> claude_code -> others
+        cli_cfg = None
+        adapter = None
+        for candidate in [cli_key, "claude_code", "gemini_cli", "qwen_cli"]:
+            _cfg = getattr(self.config.cli, candidate, None)
+            if _cfg and _cfg.enabled:
+                _adapter = _build_adapter(candidate, self.config)
+                if _adapter.is_available():
+                    if candidate != cli_key:
+                        logger.warning("CLI %s unavailable, fell back to %s", cli_key, candidate)
+                    cli_key = candidate
+                    cli_cfg = _cfg
+                    adapter = _adapter
+                    break
 
-        if cli_cfg is None or not cli_cfg.enabled:
+        if adapter is None:
             await _clear_reaction(message, _REACT_THINKING, self.user)
             await _react(message, _REACT_ERROR)
-            await message.reply(f"❌ Reviewer CLI `{cli_key}` is not enabled.")
-            return
-        if not adapter.is_available():
-            await _clear_reaction(message, _REACT_THINKING, self.user)
-            await _react(message, _REACT_ERROR)
-            await message.reply(f"❌ `{cli_cfg.command}` not found on PATH.")
+            await message.reply("❌ No enabled CLI agent found on PATH.")
             return
 
         run = start_workflow_run(

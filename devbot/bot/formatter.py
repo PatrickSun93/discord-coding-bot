@@ -20,13 +20,14 @@ def format_project_list(projects: dict) -> str:
     return "\n".join(lines)
 
 
-def format_status(task_info, is_busy: bool) -> str:
-    if not is_busy or task_info is None:
+def format_status(tasks: dict) -> str:
+    if not tasks:
         return "💤 No task running."
-    elapsed = task_info.elapsed()
-    return (
-        f"⚡ **Running**\n"
-        f"CLI: `{task_info.cli_name}` | Project: `{task_info.project}`\n"
-        f"Elapsed: `{elapsed:.0f}s`\n"
-        f"Task: {task_info.task[:200]}"
-    )
+    lines = [f"⚡ **Running** ({len(tasks)} task{'s' if len(tasks) != 1 else ''})"]
+    for project, info in tasks.items():
+        elapsed = info.elapsed()
+        lines.append(
+            f"\n**{project}** — `{info.cli_name}` — `{elapsed:.0f}s`\n"
+            f"  {info.task[:200]}"
+        )
+    return "\n".join(lines)

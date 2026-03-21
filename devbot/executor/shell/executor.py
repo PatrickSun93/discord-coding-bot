@@ -55,8 +55,8 @@ async def run_shell(
     # For shells that take -c <command_string>, we use prefix + [command]
     # For WSL, the command is passed directly as args
     if is_wsl:
-        # wsl bash -c "<command>" or just wsl <command>
-        cmd_args = prefix + ["bash", "-c", command]
+        # Use bash -ic so .bashrc is sourced — npm globals, nvm, etc. are on PATH
+        cmd_args = prefix + ["bash", "-ic", command]
     elif resolved_shell in ("powershell", "cmd"):
         # powershell -Command <cmd> or cmd /c <cmd>
         cmd_args = prefix + [command]

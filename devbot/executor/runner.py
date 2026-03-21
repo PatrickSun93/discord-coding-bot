@@ -16,12 +16,16 @@ async def run_subprocess(
     on_process: Callable[[asyncio.subprocess.Process], None] | None = None,
 ) -> int:
     """Run a command, stream output lines via on_output, return exit code."""
-    process = await asyncio.create_subprocess_exec(
-        *cmd,
-        cwd=cwd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
+    try:
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            cwd=cwd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+    except FileNotFoundError:
+        await on_output(f"[error] Command not found: {cmd[0]!r} — is it installed and on PATH?")
+        return 127
 
     if on_process is not None:
         on_process(process)
