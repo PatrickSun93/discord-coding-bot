@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 import shutil
-import sys
 from pathlib import Path
 
 import platformdirs
 import yaml
+
+from devbot.healthcheck import format_health_report, run_machine_healthcheck
 
 
 def _config_path() -> Path:
@@ -93,6 +95,12 @@ def cmd_init() -> None:
             "timeout": 300,
             "wsl_distro": None,
         },
+        "todo": {
+            "file": "~/.devbot/todos.md",
+            "done_file": "~/.devbot/done.md",
+            "auto_start": False,
+            "busy_cli_timeout": 300,
+        },
         "context": {
             "max_age_days": 7,
         },
@@ -114,7 +122,7 @@ def cmd_init() -> None:
 
 
 def cmd_doctor() -> None:
-    """Validate CLIs, config, shells, and connectivity."""
+    """Validate machine health, config, shells, and connectivity."""
     import platform as _platform
     print("=== DevBot Doctor ===")
     ok = True
@@ -131,21 +139,17 @@ def cmd_doctor() -> None:
         except Exception as exc:
             print(f"  [FAIL] Config load error: {exc}")
             ok = False
+            cfg = None
     else:
         print(f"[FAIL] No config at {config_path} -- run `devbot init`")
         ok = False
+        cfg = None
 
-    # CLI agents
-    print("\nCLI Agents:")
-    for name, binary in [
-        ("Claude Code", "claude"),
-        ("Codex",       "codex"),
-        ("Gemini CLI",  "gemini"),
-        ("Qwen CLI",    "qwen"),
-    ]:
-        found = shutil.which(binary)
-        status = f"[OK] {found}" if found else "[--] not found (optional)"
-        print(f"  {name} ({binary}): {status}")
+    if cfg is not None:
+        report = asyncio.run(run_machine_healthcheck(cfg))
+        print()
+        print(format_health_report(report, markdown=False))
+        ok = ok and not report.has_critical_failures()
 
     # Support tools
     print("\nSupport Tools:")
@@ -173,15 +177,6 @@ def cmd_doctor() -> None:
             print(f"  [OK] {shell}: {found}")
     if os_name == "Windows" and not shutil.which("wsl"):
         print("  [--] WSL not found -- shell defaults to PowerShell")
-
-    # Ollama
-    try:
-        import httpx
-        r = httpx.get("http://localhost:11434/api/tags", timeout=3)
-        models = [m["name"] for m in r.json().get("models", [])]
-        print(f"\n[OK] Ollama running -- models: {models or '(none pulled)'}")
-    except Exception:
-        print("\n[--] Ollama not reachable at localhost:11434 (optional LLM fallback)")
 
     # Discord token validation
     try:
@@ -220,7 +215,7 @@ def cli_main() -> None:
     parser = argparse.ArgumentParser(prog="devbot", description="DevBot -- Discord AI dev assistant")
     sub = parser.add_subparsers(dest="command")
     sub.add_parser("init", help="Interactive setup wizard")
-    sub.add_parser("doctor", help="Validate config, CLIs, and shells")
+    sub.add_parser("doctor", help="Validate machine health, config, and shells")
     sub.add_parser("start", help="Start the bot")
 
     args = parser.parse_args()

@@ -58,6 +58,28 @@ ANTHROPIC_TOOLS: list[dict] = [
         },
     },
     {
+        "name": "run_pipeline",
+        "description": (
+            "Run the multi-step feature delivery workflow for a project. "
+            "Use this when the user asks for a full workflow or pipeline that should branch, code, "
+            "review, test, and optionally push/create a PR instead of just doing a single coding task."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "project": {
+                    "type": "string",
+                    "description": "Project name (from config) or absolute path.",
+                },
+                "task": {
+                    "type": "string",
+                    "description": "The feature or end-to-end change request to run through the pipeline.",
+                },
+            },
+            "required": ["project", "task"],
+        },
+    },
+    {
         "name": "run_shell",
         "description": (
             "Execute a shell command on the host machine. "
@@ -186,6 +208,36 @@ ANTHROPIC_TOOLS: list[dict] = [
         },
     },
     {
+        "name": "todo_add",
+        "description": (
+            "Add a task to the todo queue. "
+            "Use this when the user explicitly wants work queued for later instead of executed now."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "cli": {
+                    "type": "string",
+                    "enum": ["claude_code", "codex", "gemini_cli", "qwen_cli", "pipeline"],
+                    "description": "Which CLI or workflow should own the queued work.",
+                },
+                "project": {
+                    "type": "string",
+                    "description": "Project name or absolute path.",
+                },
+                "task": {
+                    "type": "string",
+                    "description": "Task text to add to the queue.",
+                },
+                "priority": {
+                    "type": "integer",
+                    "description": "Priority 1-3. Default: 3.",
+                },
+            },
+            "required": ["cli", "project", "task"],
+        },
+    },
+    {
         "name": "ask_clarification",
         "description": (
             "Ask the user for more information before proceeding. "
@@ -234,6 +286,23 @@ TOOLS: list[dict] = [
                     "files": {"type": "array", "items": {"type": "string"}},
                 },
                 "required": ["cli", "task", "project"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "run_pipeline",
+            "description": (
+                "Run the multi-step feature delivery workflow with branch, code, review, test, and release handling."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "project": {"type": "string"},
+                    "task": {"type": "string"},
+                },
+                "required": ["project", "task"],
             },
         },
     },
@@ -323,6 +392,26 @@ TOOLS: list[dict] = [
                     },
                 },
                 "required": ["project", "goal"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "todo_add",
+            "description": "Add a task to the todo queue for later execution.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "cli": {
+                        "type": "string",
+                        "enum": ["claude_code", "codex", "gemini_cli", "qwen_cli", "pipeline"],
+                    },
+                    "project": {"type": "string"},
+                    "task": {"type": "string"},
+                    "priority": {"type": "integer"},
+                },
+                "required": ["cli", "project", "task"],
             },
         },
     },
@@ -511,11 +600,20 @@ Classify the user's intent, then pick the tool:
                         "gemini"                -> gemini_cli
                         "qwen"                  -> qwen_cli
 
+  FULL WORKFLOW -> run_pipeline
+    Signals: pipeline, full workflow, end-to-end delivery, branch + review + test,
+             commit and open a PR, implement then review and test before release
+    Use this when the user explicitly wants the whole delivery workflow, not just one CLI task.
+
   ANALYZE      -> analyze_project
     Signals: evaluate, analyze, assess, critique, review architecture,
              review workflow, review design, find risks, audit completeness
     Use when the main deliverable is an assessment report, not code changes.
     Do NOT use if the user names a specific CLI agent -- use run_cli instead.
+
+  QUEUE WORK   -> todo_add
+    Signals: add this to todo, queue this, schedule this later, put this on the backlog
+    Use only when the user explicitly wants deferred execution rather than immediate execution.
 
   READ DOCS    -> read_context or read_files
     Signals: show context, read CLAUDE.md / AGENTS.md / README,

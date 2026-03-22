@@ -1,17 +1,17 @@
 """Verify router and tools_schema import cleanly after refactor."""
 
-from devbot.llm.tools_schema import ANTHROPIC_TOOLS, TOOLS, ROUTER_SYSTEM_PROMPT
 from devbot.llm.router import LLMRouter
+from devbot.llm.tools_schema import ANTHROPIC_TOOLS, ROUTER_SYSTEM_PROMPT, TOOLS
 
 # Anthropic tools format check
-assert len(ANTHROPIC_TOOLS) == 7
+assert len(ANTHROPIC_TOOLS) == 9
 for t in ANTHROPIC_TOOLS:
     assert "name" in t
     assert "input_schema" in t, f"Missing input_schema in {t['name']}"
 print(f"ANTHROPIC_TOOLS OK: {[t['name'] for t in ANTHROPIC_TOOLS]}")
 
 # OpenAI tools format check
-assert len(TOOLS) == 7
+assert len(TOOLS) == 9
 for t in TOOLS:
     assert t.get("type") == "function"
     assert "function" in t
@@ -43,4 +43,5 @@ assert decision.args["project"] == "backend"
 print(f"_parse_anthropic OK: tool={decision.tool}, args={decision.args}")
 
 assert "TEAM ROLES" in ROUTER_SYSTEM_PROMPT
+assert "run_pipeline" in ROUTER_SYSTEM_PROMPT
 print("\nAll router checks passed.")

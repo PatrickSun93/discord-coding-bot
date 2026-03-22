@@ -5,24 +5,39 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-from devbot.config.settings import _default_config_path
-from devbot.context.files import build_file_bundle, resolve_project_files, select_analysis_files
+from devbot.config.settings import _default_config_path, load_config
+from devbot.context.files import (
+    build_file_bundle,
+    resolve_project_files,
+    select_analysis_files,
+)
+from devbot.context.loader import load_project_context
+from devbot.context.project import resolve_project
 from devbot.executor.adapters.claude_code import ClaudeCodeAdapter
 from devbot.executor.adapters.codex import CodexAdapter
 from devbot.executor.adapters.gemini_cli import GeminiCLIAdapter
 from devbot.executor.adapters.qwen_cli import QwenCLIAdapter
+from devbot.executor.auto_restart import (
+    capture_project_snapshot,
+    detect_restart_relevant_changes,
+    resolve_auto_restart_plan,
+)
 from devbot.executor.shell.blocklist import is_command_blocked
 from devbot.executor.shell.platform import detect_platform, windows_path_to_wsl
 from devbot.llm.tools_schema import ANTHROPIC_TOOLS, TOOLS, build_system_prompt
-from devbot.context.loader import load_project_context
-from devbot.context.project import resolve_project
-from devbot.config.settings import load_config
+from devbot.todo import TodoItem, add_todo_item, parse_todo_file, prepare_todo_item
 from devbot.workflow.registry import (
     load_role_registry,
     load_workflow_registry,
     select_cli_for_role,
 )
-from devbot.workflow.store import start_workflow_run, write_artifact
+from devbot.workflow.store import (
+    append_workflow_event,
+    read_workflow_events,
+    set_workflow_status,
+    start_workflow_run,
+    write_artifact,
+)
 
 print("All imports OK")
 print("Default config path:", _default_config_path())
@@ -30,50 +45,53 @@ print("Default config path:", _default_config_path())
 # Adapter smoke tests — [cmd] + base_args + autonomy_args + extra_args + [task]
 adapter = ClaudeCodeAdapter()
 cmd = adapter.build_command("add tests", "/tmp/proj")
-assert cmd[0] == "claude"
+assert Path(cmd[0]).name.lower().startswith("claude")
 assert "-p" in cmd
+assert cmd[cmd.index("-p") + 1] == "add tests"
 assert "--output-format" in cmd
 assert "stream-json" in cmd
 assert "--dangerously-skip-permissions" in cmd
-assert cmd[-1] == "add tests"
 print(f"ClaudeCodeAdapter.build_command OK: {cmd}")
 
 adapter_codex = CodexAdapter()
 cmd_codex = adapter_codex.build_command("fix bug", "/tmp/proj")
-assert cmd_codex[0] == "codex"
+assert Path(cmd_codex[0]).name.lower().startswith("codex")
 assert "exec" in cmd_codex
 assert "--json" in cmd_codex
 assert "--full-auto" in cmd_codex
+assert "--skip-git-repo-check" in cmd_codex
 assert cmd_codex[-1] == "fix bug"
 print(f"CodexAdapter.build_command OK: {cmd_codex}")
 
 adapter_q = QwenCLIAdapter()
 cmd_q = adapter_q.build_command("write docs", "/tmp/proj")
-assert cmd_q[0] == "qwen"
+assert Path(cmd_q[0]).name.lower().startswith("qwen")
 assert "--yolo" in cmd_q
-assert cmd_q[-1] == "write docs"
+assert cmd_q[cmd_q.index("-p") + 1] == "write docs"
 print(f"QwenCLIAdapter.build_command OK: {cmd_q}")
 
 adapter_g = GeminiCLIAdapter()
 cmd_g = adapter_g.build_command("review code", "/tmp/proj")
-assert cmd_g[0] == "gemini"
+assert Path(cmd_g[0]).name.lower().startswith("gemini")
 assert "--yolo" in cmd_g
-assert cmd_g[-1] == "review code"
+assert cmd_g[cmd_g.index("-p") + 1] == "review code"
 print(f"GeminiCLIAdapter.build_command OK: {cmd_g}")
 
 # Tool schema sanity
-assert len(TOOLS) == 7, f"Expected 7 tools, got {len(TOOLS)}"
+assert len(TOOLS) == 9, f"Expected 9 tools, got {len(TOOLS)}"
 tool_names = {t["function"]["name"] for t in TOOLS}
 assert tool_names == {
     "run_cli",
+    "run_pipeline",
     "run_shell",
     "read_context",
     "read_files",
     "analyze_project",
+    "todo_add",
     "ask_clarification",
     "list_projects",
 }, tool_names
-assert len(ANTHROPIC_TOOLS) == 7
+assert len(ANTHROPIC_TOOLS) == 9
 print(f"Tool schema OK — tools: {tool_names}")
 
 cfg = load_config()
@@ -156,6 +174,38 @@ try:
     assert "Current design notes" in bundle
     print(f"File discovery OK — selected={included}")
 
+    todo_path = tmp_root / "todos.md"
+    todo_item = TodoItem(
+        item_id="smoke",
+        priority=1,
+        cli="claude",
+        project=str(tmp_dir),
+        task="Review the workflow design",
+    )
+    add_todo_item(todo_path, todo_item)
+    parsed_items = parse_todo_file(todo_path)
+    assert len(parsed_items) == 1
+    prepared_item, issue = prepare_todo_item(parsed_items[0], cfg)
+    assert issue is None
+    assert prepared_item is not None
+    print(f"Todo parsing OK — {prepared_item.item.cli} -> {prepared_item.project_name}")
+
+    from devbot.config.settings import ProjectCommandsConfig, ProjectConfig
+
+    restart_cfg = ProjectConfig(
+        path=tmp_dir,
+        auto_restart=True,
+        commands=ProjectCommandsConfig(restart="echo restart", restart_shell="cmd"),
+    )
+    before = capture_project_snapshot(str(tmp_dir))
+    (tmp_dir / "app.py").write_text("print('changed')\n", encoding="utf-8")
+    after = capture_project_snapshot(str(tmp_dir))
+    restart_changes = detect_restart_relevant_changes(before, after)
+    assert "app.py" in restart_changes
+    plan, _ = resolve_auto_restart_plan(cfg, restart_cfg, "tmp-proj")
+    assert plan is not None
+    print(f"Auto restart planning OK — changes={restart_changes[:2]}")
+
     run = start_workflow_run(
         project_path=str(tmp_dir),
         project_name="tmp-proj",
@@ -164,7 +214,11 @@ try:
         goal="evaluate workflow design",
     )
     artifact = write_artifact(run, "brief.md", "# brief")
+    append_workflow_event(run, stage="reviewer", status="completed", message="Smoke event")
+    set_workflow_status(run, status="succeeded", summary="smoke ok")
+    events = read_workflow_events(run)
     assert artifact.exists()
+    assert events
     print(f"Workflow store OK — run={run.run_id}")
 finally:
     shutil.rmtree(tmp_root, ignore_errors=True)

@@ -94,6 +94,14 @@ class ContextConfig:
 
 
 @dataclass
+class TodoConfig:
+    file: Path = field(default_factory=lambda: Path("~/.devbot/todos.md").expanduser())
+    done_file: Path = field(default_factory=lambda: Path("~/.devbot/done.md").expanduser())
+    auto_start: bool = False
+    busy_cli_timeout: int = 300
+
+
+@dataclass
 class ProjectDocsConfig:
     product: list[str] = field(default_factory=lambda: ["README.md"])
     architecture: list[str] = field(
@@ -116,6 +124,8 @@ class ProjectCommandsConfig:
     test: str = ""
     smoke: list[str] = field(default_factory=list)
     run: str = ""
+    restart: str = ""
+    restart_shell: str = "auto"
 
 
 @dataclass
@@ -133,10 +143,27 @@ class ProjectAnalysisConfig:
 
 
 @dataclass
+class PipelineConfig:
+    coder: str = ""
+    reviewers: list[str] = field(default_factory=list)
+    tester: str = ""
+    test_command: str = ""
+    lint_command: str = ""
+    max_cycles: int = 10
+    auto_pr: bool = True
+    pr_tool: str = "gh"
+    base_branch: str = "main"
+    plan_threshold: str = "complex"
+    push_remote: str = "origin"
+
+
+@dataclass
 class ProjectConfig:
     path: Path
     description: str = ""
     type: str = "generic"
+    auto_restart: bool = False
+    restart_service: str = ""
     context_files: list[str] = field(
         default_factory=lambda: ["CLAUDE.md", "AGENTS.md", "GEMINI.md", "README.md"]
     )
@@ -144,6 +171,7 @@ class ProjectConfig:
     commands: ProjectCommandsConfig = field(default_factory=ProjectCommandsConfig)
     qa: ProjectQAConfig = field(default_factory=ProjectQAConfig)
     analysis: ProjectAnalysisConfig = field(default_factory=ProjectAnalysisConfig)
+    pipeline: PipelineConfig = field(default_factory=PipelineConfig)
     role_preferences: dict[str, str] = field(default_factory=dict)
 
 
@@ -167,10 +195,12 @@ class Config:
     llm: LLMConfig
     cli: CLIConfig
     shell: ShellConfig
+    todo: TodoConfig
     context: ContextConfig
     reporter: ReporterConfig
     projects: dict[str, ProjectConfig]
     services: dict[str, ServiceConfig] = field(default_factory=dict)
+    pipeline: PipelineConfig = field(default_factory=PipelineConfig)
     team_roles: dict[str, dict[str, Any]] = field(default_factory=dict)
     workflows: dict[str, dict[str, Any]] = field(default_factory=dict)
 
@@ -184,14 +214,26 @@ def _default_config_path() -> Path:
     return config_dir / "config.yaml"
 
 
-def _parse_cli_tool(d: dict, default_cmd: str, default_base: list[str],
-                    default_autonomy: list[str], default_roles: list[str]) -> CLIToolConfig:
+def _parse_cli_tool(
+    d: dict,
+    default_cmd: str,
+    default_base: list[str],
+    default_autonomy: list[str],
+    default_roles: list[str],
+    default_extra: list[str] | None = None,
+) -> CLIToolConfig:
     """Parse a CLI tool config supporting both new (base_args/autonomy_args) and old (args) format."""
     command = d.get("command", default_cmd)
     enabled = d.get("enabled", True)
     timeout = d.get("timeout", 600)
     roles = d.get("roles", default_roles)
-    extra_args = d.get("extra_args", [])
+    extra_raw = d.get("extra_args")
+    if extra_raw is None:
+        extra_args = list(default_extra or [])
+    else:
+        extra_args = [str(v) for v in extra_raw]
+        if not extra_args and default_extra:
+            extra_args = list(default_extra)
 
     if "base_args" in d:
         # New format
@@ -220,6 +262,25 @@ def _ensure_str_list(value: Any) -> list[str]:
     if isinstance(value, str) and value.strip():
         return [value]
     return []
+
+
+def _parse_pipeline_config(data: dict[str, Any] | None, fallback: PipelineConfig | None = None) -> PipelineConfig:
+    base = fallback or PipelineConfig()
+    raw = data or {}
+    reviewers = _ensure_str_list(raw.get("reviewers"))
+    return PipelineConfig(
+        coder=str(raw.get("coder", base.coder)),
+        reviewers=reviewers or list(base.reviewers),
+        tester=str(raw.get("tester", base.tester)),
+        test_command=str(raw.get("test_command", base.test_command)),
+        lint_command=str(raw.get("lint_command", base.lint_command)),
+        max_cycles=max(1, int(raw.get("max_cycles", base.max_cycles))),
+        auto_pr=bool(raw.get("auto_pr", base.auto_pr)),
+        pr_tool=str(raw.get("pr_tool", base.pr_tool)),
+        base_branch=str(raw.get("base_branch", base.base_branch)),
+        plan_threshold=str(raw.get("plan_threshold", base.plan_threshold)),
+        push_remote=str(raw.get("push_remote", base.push_remote)),
+    )
 
 
 def load_config(path: Optional[Path] = None) -> Config:
@@ -274,24 +335,28 @@ def load_config(path: Optional[Path] = None) -> Config:
             default_base=["-p", "--output-format", "stream-json"],
             default_autonomy=["--dangerously-skip-permissions"],
             default_roles=["coder"],
+            default_extra=[],
         ),
         codex=_parse_cli_tool(
             cli_data.get("codex", {}), "codex",
             default_base=["exec", "--json"],
             default_autonomy=["--full-auto"],
             default_roles=["coder"],
+            default_extra=["--skip-git-repo-check"],
         ),
         gemini_cli=_parse_cli_tool(
             cli_data.get("gemini_cli", {}), "gemini",
             default_base=["-p", "--output-format", "stream-json"],
             default_autonomy=["--yolo"],
             default_roles=["reviewer", "tester"],
+            default_extra=[],
         ),
         qwen_cli=_parse_cli_tool(
             cli_data.get("qwen_cli", {}), "qwen",
             default_base=["-p", "--output-format", "stream-json"],
             default_autonomy=["--yolo"],
             default_roles=["reviewer"],
+            default_extra=[],
         ),
     )
 
@@ -303,11 +368,21 @@ def load_config(path: Optional[Path] = None) -> Config:
         wsl_distro=shell_data.get("wsl_distro") or None,
     )
 
+    todo_data = data.get("todo", {})
+    todo_cfg = TodoConfig(
+        file=Path(str(todo_data.get("file", "~/.devbot/todos.md"))).expanduser(),
+        done_file=Path(str(todo_data.get("done_file", "~/.devbot/done.md"))).expanduser(),
+        auto_start=bool(todo_data.get("auto_start", False)),
+        busy_cli_timeout=int(todo_data.get("busy_cli_timeout", 300)),
+    )
+
     # Context
     context_data = data.get("context", {})
     context_cfg = ContextConfig(
         max_age_days=context_data.get("max_age_days", 7),
     )
+
+    pipeline_cfg = _parse_pipeline_config(data.get("pipeline"))
 
     # Reporter — also check legacy "execution" key
     exec_data = data.get("reporter") or data.get("execution", {})
@@ -330,6 +405,8 @@ def load_config(path: Optional[Path] = None) -> Config:
             path=Path(pdata["path"]),
             description=pdata.get("description", ""),
             type=pdata.get("type", "generic"),
+            auto_restart=bool(pdata.get("auto_restart", False)),
+            restart_service=str(pdata.get("restart_service", "")),
             context_files=pdata.get(
                 "context_files",
                 ["CLAUDE.md", "AGENTS.md", "GEMINI.md", "README.md"],
@@ -354,6 +431,8 @@ def load_config(path: Optional[Path] = None) -> Config:
                 test=str(commands_data.get("test", "")),
                 smoke=_ensure_str_list(commands_data.get("smoke")),
                 run=str(commands_data.get("run", "")),
+                restart=str(commands_data.get("restart", "")),
+                restart_shell=str(commands_data.get("restart_shell", "auto")),
             ),
             qa=ProjectQAConfig(
                 kind=str(qa_data.get("kind", "generic")),
@@ -365,6 +444,7 @@ def load_config(path: Optional[Path] = None) -> Config:
                 doc_globs=_ensure_str_list(analysis_data.get("doc_globs")) or ["docs/**/*.md", "*.md"],
                 preferred_reviewer_cli=str(analysis_data.get("preferred_reviewer_cli", "")),
             ),
+            pipeline=_parse_pipeline_config(pdata.get("pipeline"), fallback=pipeline_cfg),
             role_preferences={
                 str(k): str(v)
                 for k, v in role_preferences.items()
@@ -385,10 +465,12 @@ def load_config(path: Optional[Path] = None) -> Config:
         llm=llm_cfg,
         cli=cli_cfg,
         shell=shell_cfg,
+        todo=todo_cfg,
         context=context_cfg,
         reporter=reporter_cfg,
         projects=projects,
         services=services,
+        pipeline=pipeline_cfg,
         team_roles=data.get("team_roles") or {},
         workflows=data.get("workflows") or {},
     )

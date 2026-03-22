@@ -18,7 +18,7 @@ class CodexAdapter(BaseCLIAdapter):
         self.command = command
         self.base_args = base_args if base_args is not None else ["exec", "--json"]
         self.autonomy_args = autonomy_args if autonomy_args is not None else ["--full-auto"]
-        self.extra_args = extra_args or []
+        self.extra_args = ["--skip-git-repo-check"] if extra_args is None else extra_args
 
     def build_command(self, task: str, project_path: str) -> list[str]:
-        return [self.command] + self.base_args + self.autonomy_args + self.extra_args + [task]
+        return [self.resolved_command()] + self.base_args + self.autonomy_args + self.extra_args + [self.prepare_task_argument(task)]

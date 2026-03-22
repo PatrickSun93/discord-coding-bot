@@ -61,3 +61,23 @@ class WorkflowRun:
     project_name: str
     project_path: Path
     run_dir: Path
+
+
+@dataclass
+class ActiveWorkflowStatus:
+    project_name: str
+    workflow: str
+    run_id: str
+    log_path: Path
+    stage: str = ""
+    status: str = ""
+    message: str = ""
+
+
+@dataclass
+class WorkflowEvent:
+    timestamp: str
+    stage: str
+    status: str
+    message: str
+    details: dict[str, Any] = field(default_factory=dict)

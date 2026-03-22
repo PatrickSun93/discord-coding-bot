@@ -18,11 +18,16 @@ You (Discord) ──► DevBot ──► MiniMax/Ollama (Router LLM)
 ## Features
 
 - Routes messages to coding, shell, file-read, or analysis tools based on task type
+- Full `feature_delivery` pipeline: branch, code, review, QA, release, and durable run logs
+- Todo queue with direct commands and router-driven `todo_add` support
 - Real-time output streaming: live edits for short tasks, batched summaries for long ones
 - Rich Discord embeds for task results (exit code, duration, output summary)
 - Extensible project profiles: docs, commands, QA targets, analysis hints, role preferences
 - Data-driven team registry: roles and workflows are loaded from config plus packaged defaults
-- Slash commands: `/status`, `/cancel`, `/projects`, `/project add`, `/config reload`, `/history`, `/roles`, `/workflows`
+- Durable workflow events in `.devbot/runs/<workflow>/<run_id>/timeline.md` and `events.jsonl`
+- `/status` now includes active pipeline run ids and log paths
+- Startup healthcheck: verifies configured CLIs with live prompt probes and checks LLM backends before the bot goes ready
+- Slash commands: `/status`, `/cancel`, `/projects`, `/project add`, `/project restart`, `/config reload`, `/history`, `/roles`, `/workflows`
 - SQLite task history via `/history`
 - Single-user auth (owner ID gate) and optional channel restriction
 - Cross-platform: Windows, macOS, Linux
@@ -48,13 +53,19 @@ conda activate devbot
 pip install -e .
 ```
 
+For local development tooling:
+
+```bash
+pip install -e .[dev]
+```
+
 ## Setup
 
 ```bash
 # Interactive setup wizard — writes config to the platform config dir
 devbot init
 
-# Validate everything (CLIs, config, Ollama, Discord token)
+# Validate machine health (CLIs, router backends, shells, Discord token)
 devbot doctor
 ```
 
@@ -92,12 +103,22 @@ projects:
     path: "/home/user/projects/backend"
     type: "api"
     description: "Main backend API"
+    auto_restart: true
     docs:
       product: ["README.md", "docs/product/**/*.md"]
       architecture: ["ARCHITECTURE.md", "docs/architecture/**/*.md"]
       agent_context: ["CLAUDE.md", "AGENTS.md", "GEMINI.md"]
     commands:
       test: "pytest -q"
+      restart: "docker compose restart backend"
+      restart_shell: "bash"
+    pipeline:
+      coder: "codex"
+      reviewers: ["qwen_cli"]
+      tester: "qwen_cli"
+      test_command: "pytest -q"
+      max_cycles: 5
+      auto_pr: true
     analysis:
       entry_files: ["ARCHITECTURE.md"]
       preferred_reviewer_cli: "gemini_cli"
@@ -116,6 +137,10 @@ Then in Discord:
 
 ```
 > add input validation to the registration endpoint in project backend
+> run the feature delivery pipeline for backend to add rate limiting to auth
+> queue a codex task for backend to refactor the auth service tomorrow
+> !project restart backend
+> /project restart backend
 > use gemini to review the auth module in /home/me/api for security issues
 > analyze the workflow design for project backend using ARCHITECTURE.md
 > read docs/architecture/current-state.md in project backend
@@ -133,6 +158,7 @@ Then in Discord:
 | `/cancel` | Cancel the running task |
 | `/projects` | List registered projects |
 | `/project add <name> <path>` | Register a new project |
+| `/project restart <name>` | Run the project's configured restart command |
 | `/config reload` | Hot-reload config from disk |
 | `/history` | Show the last 10 tasks |
 | `/roles` | List workflow roles and preferred CLIs |
@@ -153,10 +179,14 @@ analysis:
 Projects are now first-class profiles instead of just paths. Each project can declare:
 
 - `docs`: product, architecture, and agent-context document globs
-- `commands`: install, test, smoke, and run commands
+- `commands`: install, test, smoke, run, and restart commands
 - `qa`: QA kind plus smoke commands or targets
 - `analysis`: entry files and reviewer preferences
+- `pipeline`: coder/reviewer/tester defaults, QA command, max cycles, PR behavior
 - `role_preferences`: which CLI should act as planner, coder, reviewer, and so on
+- `auto_restart` and `restart_service`: restart the app automatically after successful code changes
+
+If you already have a named entry in `services`, set `restart_service` to reuse that service's restart command and shell. Otherwise set `commands.restart` and `commands.restart_shell` directly on the project.
 
 This lets DevBot stay generic across repos while still giving the router and reviewer roles enough structure to work predictably.
 
@@ -183,6 +213,20 @@ workflows:
     default_entry_role: "security_reviewer"
 ```
 
+### Workflow Runs
+
+Every ad-hoc CLI run, analysis run, and pipeline run gets a durable run directory under the target project:
+
+```text
+.devbot/runs/<workflow>/<run_id>/
+  run.json
+  timeline.md
+  events.jsonl
+  ...
+```
+
+`timeline.md` is the human-readable step log. `events.jsonl` is the machine-readable event stream. Pipeline runs also persist prompts, diff snapshots, review reports, QA reports, and release summaries. Manual and auto-restart attempts also get their own durable restart run directory.
+
 ## Architecture
 
 ```
@@ -190,7 +234,7 @@ devbot/
 ├── config/           # YAML loader, env var interpolation, typed dataclasses
 ├── bot/              # Discord client, slash commands, message formatter
 ├── llm/              # LLM router (MiniMax primary, Ollama fallback) + tool schema
-├── workflow/         # Role registry, workflow registry, prompt builders, run artifacts
+├── workflow/         # Role/workflow registry, pipeline executor, prompt builders, run artifacts
 ├── executor/         # Task manager, subprocess runner, adaptive Discord streamer
 │   └── adapters/     # BaseCLIAdapter + Claude Code / Qwen / Gemini adapters
 ├── context/          # Project registry, file discovery, context loaders
@@ -206,6 +250,11 @@ See [devbot-architecture-v4-final.md](devbot-architecture-v4-final.md) for the f
 ```bash
 python smoke_test.py    # imports + adapter logic (no network)
 python test_runner.py   # async subprocess runner (no network)
+python -m unittest -v test_healthcheck.py      # startup and provider healthchecks
+python -m unittest -v test_user_scenarios.py  # queue, restart, and slash-command scenarios
+python -m unittest -v test_pipeline_workflow.py  # pipeline orchestration + durable log coverage
+python -m unittest -v test_shell_executor.py  # Windows/WSL shell cwd integration
+ruff check .                                  # repo lint baseline (also runs in GitHub Actions)
 ```
 
 ## Contributing
