@@ -1,107 +1,155 @@
+# DevBot
 
-# DevBot — Discord AI Development Assistant
+> A Discord-native AI software factory for your local projects.
 
-DevBot is a self-hosted Discord bot that acts as an AI-powered coding assistant. Send a natural language message in Discord; a router LLM (MiniMax, with Ollama fallback) interprets your intent, picks the right tool, and runs it against your local projects. Output streams back to Discord in real time.
+Languages: **English** | [简体中文](docs/readme/README.zh-CN.md) | [Español](docs/readme/README.es.md)
 
+DevBot turns a Discord channel into a control plane for real coding agents running on your machine. It routes natural-language requests to Claude Code, Codex, Gemini CLI, and Qwen CLI, uses MiniMax as the primary router LLM, can fall back to Ollama, and keeps durable logs for every meaningful step.
+
+This is a self-hosted project. Your code stays in your repos, your CLIs stay on your machine, and the bot orchestrates the workflow around them.
+
+```text
+Discord
+  -> DevBot
+     -> Router LLM (MiniMax primary, Ollama fallback)
+     -> CLI agents (Claude Code / Codex / Gemini / Qwen)
+     -> Project commands, restarts, and workflow logs
 ```
-You (Discord) ──► DevBot ──► MiniMax/Ollama (Router LLM)
-                    │                  │
-                    │          tool-call decision
-                    │                  │
-                    ▼                  ▼
-              CLI Executor ──► claude / qwen / gemini
-                    │
-                    ▼
-              Discord Channel (progress + results)
-```
 
-## Features
+## Why DevBot
 
-- Routes messages to coding, shell, file-read, or analysis tools based on task type
-- Full `feature_delivery` pipeline: branch, code, review, QA, release, and durable run logs
-- Todo queue with direct commands and router-driven `todo_add` support
-- Real-time output streaming: live edits for short tasks, batched summaries for long ones
-- Rich Discord embeds for task results (exit code, duration, output summary)
-- Extensible project profiles: docs, commands, QA targets, analysis hints, role preferences
-- Data-driven team registry: roles and workflows are loaded from config plus packaged defaults
-- Durable workflow events in `.devbot/runs/<workflow>/<run_id>/timeline.md` and `events.jsonl`
-- `/status` now includes active pipeline run ids and log paths
-- Startup healthcheck: verifies configured CLIs with live prompt probes and checks LLM backends before the bot goes ready
-- Slash commands: `/status`, `/cancel`, `/projects`, `/project add`, `/project restart`, `/config reload`, `/history`, `/roles`, `/workflows`
-- SQLite task history via `/history`
-- Single-user auth (owner ID gate) and optional channel restriction
-- Cross-platform: Windows, macOS, Linux
-- `devbot init` setup wizard and `devbot doctor` validation command
+- Discord-first workflow: drive coding, review, analysis, todo queues, and restarts from chat.
+- Bring-your-own agents: use the CLI tools you already trust instead of a closed hosted runtime.
+- Project-aware execution: projects carry docs, commands, pipeline defaults, reviewer preferences, and restart behavior.
+- Durable observability: every important run writes structured artifacts under `.devbot/runs/`.
+- Machine healthchecks: startup and `/doctor` verify CLI availability, auth state, shells, and LLM connectivity before you trust the bot.
 
-## Requirements
+## What It Can Do
+
+- Route ad-hoc coding, shell, file-read, and analysis requests from Discord.
+- Run a full `feature_delivery` pipeline: plan, code, review, QA, and release assessment.
+- Queue deferred work with `!todo` and execute items safely across CLIs.
+- Auto-restart projects after real code changes.
+- Manually restart services with `!project restart <name>` or `/project restart <name>`.
+- Keep step-by-step logs for ad-hoc runs, analysis runs, pipelines, todos, and restarts.
+- Expose current activity with `/status`, including active pipeline run ids and log paths.
+
+## Current Highlights
+
+- Multi-CLI support: Claude Code, Codex, Gemini CLI, Qwen CLI
+- Router backends: MiniMax primary, Ollama fallback
+- Workflow system: roles, workflows, project profiles, durable run artifacts
+- Todo system: add, list, run, status, cancel
+- Restart system: auto-restart and manual project restart
+- Shared machine healthcheck: startup, `devbot doctor`, and `/doctor`
+- Repo hygiene: `ruff` configured in `pyproject.toml` and enforced in GitHub Actions
+
+## Quick Start
+
+### Requirements
 
 - Python 3.11+
-- At least one AI CLI installed and on `PATH`:
-  - [Claude Code](https://claude.ai/code) (`claude`)
-  - [Qwen CLI](https://github.com/QwenLM/qwen-agent) (`qwen`)
-  - [Gemini CLI](https://github.com/google-gemini/gemini-cli) (`gemini`)
-- [Ollama](https://ollama.com/) running locally (for the fallback router)
+- Git
 - A Discord bot token and your Discord user ID
+- At least one supported CLI installed and available on `PATH`
+  - [Claude Code](https://claude.ai/code)
+  - [OpenAI Codex CLI](https://github.com/openai/codex)
+  - [Gemini CLI](https://github.com/google-gemini/gemini-cli)
+  - [Qwen CLI](https://github.com/QwenLM/qwen-agent)
+- MiniMax API access for the primary router
+- Optional: Ollama for local fallback routing
 
-## Installation
+### Install
 
 ```bash
-git clone https://github.com/your-username/discord-coding-bot
+git clone https://github.com/PatrickSun93/discord-coding-bot.git
 cd discord-coding-bot
 conda create -n devbot python=3.11 -y
 conda activate devbot
-pip install -e .
-```
-
-For local development tooling:
-
-```bash
 pip install -e .[dev]
 ```
 
-## Setup
+### Initialize
 
 ```bash
-# Interactive setup wizard — writes config to the platform config dir
 devbot init
-
-# Validate machine health (CLIs, router backends, shells, Discord token)
 devbot doctor
+devbot start
 ```
 
-The config file is written to:
+Config is stored in your platform config directory:
 
 | Platform | Path |
-|----------|------|
-| Windows  | `%LOCALAPPDATA%\devbot\devbot\config.yaml` |
-| macOS    | `~/Library/Application Support/devbot/config.yaml` |
-| Linux    | `~/.config/devbot/config.yaml` |
+| --- | --- |
+| Windows | `%LOCALAPPDATA%\devbot\devbot\config.yaml` |
+| macOS | `~/Library/Application Support/devbot/config.yaml` |
+| Linux | `~/.config/devbot/config.yaml` |
 
-### Manual config
+If you prefer to edit config manually, start from [`devbot/config/default_config.yaml`](devbot/config/default_config.yaml).
 
-Copy `devbot/config/default_config.yaml` to the platform path above and fill in your values:
+## Example Discord Flows
+
+```text
+use codex to add rate limiting to the auth service in project backend
+review the payment module in project backend with gemini for security issues
+run the feature delivery pipeline for backend to add audit logging
+!todo add claude_code backend refactor the retry logic --priority 1
+!todo run
+!project restart backend
+/project restart backend
+/status
+/doctor
+```
+
+## Commands
+
+### Slash Commands
+
+| Command | Description |
+| --- | --- |
+| `/status` | Show running tasks, todo status, active pipeline runs, and log paths |
+| `/cancel` | Cancel the current task, a project task, or all queue work |
+| `/projects` | List registered projects |
+| `/project add <name> <path>` | Register a project |
+| `/project restart <name>` | Restart a configured project service |
+| `/config reload` | Hot-reload config from disk |
+| `/history` | Show recent task history |
+| `/shells` | Show detected shells and current default shell |
+| `/doctor` | Run the full machine healthcheck |
+| `/roles` | List workflow roles and preferred CLIs |
+| `/workflows` | List workflow definitions |
+
+### Todo Commands
+
+- `!todo add <cli> <project> <task>`
+- `!todo add <cli> <project> <task> --priority 1`
+- `!todo list`
+- `!todo run`
+- `!todo status`
+- `!todo cancel`
+
+### Project Restart Commands
+
+- `!project restart <name>`
+- `/project restart <name>`
+
+## Project Profiles
+
+Projects are first-class config objects, not just paths. A project can define:
+
+- `docs` for product, architecture, and agent-context files
+- `commands` for test, smoke, run, and restart actions
+- `analysis` entry files and reviewer preferences
+- `pipeline` coder/reviewer/tester defaults and QA settings
+- `role_preferences` for planner, coder, reviewer, and release roles
+- `auto_restart` or `restart_service` behavior after code changes
+
+Example:
 
 ```yaml
-discord:
-  token: "${DISCORD_BOT_TOKEN}"      # or paste the token directly
-  owner_id: "123456789012345678"     # your Discord user ID
-  channel_id: ""                     # optional: restrict to one channel
-
-llm:
-  primary:
-    provider: "minimax"
-    base_url: "https://api.minimaxi.com/anthropic"
-    api_key: "${MINIMAX_API_KEY}"
-    model: "MiniMax-M2.7"
-  fallback:
-    provider: "ollama"
-    base_url: "http://localhost:11434/v1"
-    model: "qwen2.5:14b"
-
 projects:
   backend:
     path: "/home/user/projects/backend"
-    type: "api"
     description: "Main backend API"
     auto_restart: true
     docs:
@@ -118,104 +166,16 @@ projects:
       tester: "qwen_cli"
       test_command: "pytest -q"
       max_cycles: 5
-      auto_pr: true
     analysis:
       entry_files: ["ARCHITECTURE.md"]
       preferred_reviewer_cli: "gemini_cli"
-    role_preferences:
-      coder: "claude_code"
-      reviewer: "qwen_cli"
 ```
 
-## Usage
+Per-project overrides can also live inside a repo-local `.devbot.yaml`.
 
-```bash
-devbot start
-```
+## Durable Logs And Observability
 
-Then in Discord:
-
-```
-> add input validation to the registration endpoint in project backend
-> run the feature delivery pipeline for backend to add rate limiting to auth
-> queue a codex task for backend to refactor the auth service tomorrow
-> !project restart backend
-> /project restart backend
-> use gemini to review the auth module in /home/me/api for security issues
-> analyze the workflow design for project backend using ARCHITECTURE.md
-> read docs/architecture/current-state.md in project backend
-> list projects
-> /cancel
-> /status
-> /history
-```
-
-### Slash commands
-
-| Command | Description |
-|---------|-------------|
-| `/status` | Show current task (CLI, elapsed time, line count) |
-| `/cancel` | Cancel the running task |
-| `/projects` | List registered projects |
-| `/project add <name> <path>` | Register a new project |
-| `/project restart <name>` | Run the project's configured restart command |
-| `/config reload` | Hot-reload config from disk |
-| `/history` | Show the last 10 tasks |
-| `/roles` | List workflow roles and preferred CLIs |
-| `/workflows` | List workflow definitions |
-
-### Per-project overrides
-
-Create `.devbot.yaml` in a project directory to customise context files or analysis entry files:
-
-```yaml
-context_files: ["claude.md", "docs/ARCHITECTURE.md"]
-analysis:
-  entry_files: ["docs/ARCHITECTURE.md", "docs/current-workflow.md"]
-```
-
-### Project Profiles
-
-Projects are now first-class profiles instead of just paths. Each project can declare:
-
-- `docs`: product, architecture, and agent-context document globs
-- `commands`: install, test, smoke, run, and restart commands
-- `qa`: QA kind plus smoke commands or targets
-- `analysis`: entry files and reviewer preferences
-- `pipeline`: coder/reviewer/tester defaults, QA command, max cycles, PR behavior
-- `role_preferences`: which CLI should act as planner, coder, reviewer, and so on
-- `auto_restart` and `restart_service`: restart the app automatically after successful code changes
-
-If you already have a named entry in `services`, set `restart_service` to reuse that service's restart command and shell. Otherwise set `commands.restart` and `commands.restart_shell` directly on the project.
-
-This lets DevBot stay generic across repos while still giving the router and reviewer roles enough structure to work predictably.
-
-### Team Roles And Workflows
-
-DevBot ships with default roles such as `planner`, `coder`, `reviewer`, `qa`, `release`, and `investigator`, plus workflows like `analysis`, `code_review`, `investigation`, and `feature_delivery`.
-
-You can extend them in config:
-
-```yaml
-team_roles:
-  security_reviewer:
-    purpose: "Audit security-sensitive changes."
-    capabilities: ["security", "review"]
-    preferred_clis: ["gemini_cli", "qwen_cli"]
-    inputs: ["diff", "plan", "project_context"]
-    outputs: ["security_report"]
-    allowed_tools: ["read_files", "analyze_project"]
-
-workflows:
-  security_audit:
-    description: "Security-first project audit."
-    stages: ["security_reviewer", "qa"]
-    default_entry_role: "security_reviewer"
-```
-
-### Workflow Runs
-
-Every ad-hoc CLI run, analysis run, and pipeline run gets a durable run directory under the target project:
+Every important run writes a durable artifact directory under the target project:
 
 ```text
 .devbot/runs/<workflow>/<run_id>/
@@ -225,37 +185,89 @@ Every ad-hoc CLI run, analysis run, and pipeline run gets a durable run director
   ...
 ```
 
-`timeline.md` is the human-readable step log. `events.jsonl` is the machine-readable event stream. Pipeline runs also persist prompts, diff snapshots, review reports, QA reports, and release summaries. Manual and auto-restart attempts also get their own durable restart run directory.
+This applies to:
+
+- ad-hoc CLI runs
+- analysis runs
+- feature pipelines
+- restart attempts
+
+Pipeline runs also persist stage prompts, stage outputs, review reports, QA artifacts, and release summaries. The point is simple: if something went wrong, there should be a file on disk showing where and why.
+
+## Healthcheck
+
+DevBot performs a shared machine healthcheck at startup, in `devbot doctor`, and in `/doctor`.
+
+It checks:
+
+- configured CLI binaries on `PATH`
+- live CLI prompt probes so auth failures are caught, not hidden
+- MiniMax primary model reachability
+- fallback LLM endpoint and model availability
+- shell environment details
+
+The healthcheck also classifies some CLI-specific failures more clearly. For example, Gemini eligibility or account-auth problems are surfaced as account issues rather than generic "command failed" noise.
 
 ## Architecture
 
-```
+```text
 devbot/
-├── config/           # YAML loader, env var interpolation, typed dataclasses
-├── bot/              # Discord client, slash commands, message formatter
-├── llm/              # LLM router (MiniMax primary, Ollama fallback) + tool schema
-├── workflow/         # Role/workflow registry, pipeline executor, prompt builders, run artifacts
-├── executor/         # Task manager, subprocess runner, adaptive Discord streamer
-│   └── adapters/     # BaseCLIAdapter + Claude Code / Qwen / Gemini adapters
-├── context/          # Project registry, file discovery, context loaders
-├── history.py        # SQLite task history
-├── cli.py            # devbot init / doctor / start entry points
-└── main.py           # Bot entry point
+├── bot/              Discord client, slash commands, message formatting
+├── config/           Config loader and defaults
+├── context/          Project resolution and context loading
+├── executor/         Task manager, CLI adapters, shell execution, restart logic
+├── llm/              Router and tool schema
+├── todo/             Todo parsing, validation, queue execution, archiving
+├── workflow/         Roles, workflows, prompts, durable run storage
+├── healthcheck.py    Startup and doctor healthchecks
+├── history.py        SQLite task history
+├── cli.py            devbot init / doctor / start
+└── main.py           Application entry point
 ```
 
-See [devbot-architecture-v4-final.md](devbot-architecture-v4-final.md) for the full design document.
+For the detailed design and milestone plan, see [devbot-architecture-v4-final.md](devbot-architecture-v4-final.md).
 
-## Smoke tests
+## Development
+
+### Lint
 
 ```bash
-python smoke_test.py    # imports + adapter logic (no network)
-python test_runner.py   # async subprocess runner (no network)
-python -m unittest -v test_healthcheck.py      # startup and provider healthchecks
-python -m unittest -v test_user_scenarios.py  # queue, restart, and slash-command scenarios
-python -m unittest -v test_pipeline_workflow.py  # pipeline orchestration + durable log coverage
-python -m unittest -v test_shell_executor.py  # Windows/WSL shell cwd integration
-ruff check .                                  # repo lint baseline (also runs in GitHub Actions)
+ruff check .
 ```
+
+### Useful Tests
+
+```bash
+python smoke_test.py
+python test_runner.py
+python test_todo.py
+python test_auto_restart.py
+python -m unittest -v test_healthcheck.py
+python -m unittest -v test_user_scenarios.py
+python -m unittest -v test_pipeline_workflow.py
+python -m unittest -v test_shell_executor.py
+python test_full_pipeline.py
+python test_router_import.py
+```
+
+`test_minimax.py` is a live network check and should be treated as an explicit integration test, not the default local regression suite.
+
+## Multilingual Docs
+
+- English: this `README.md` is the canonical version.
+- Simplified Chinese: [`docs/readme/README.zh-CN.md`](docs/readme/README.zh-CN.md)
+- Spanish: [`docs/readme/README.es.md`](docs/readme/README.es.md)
+
+Translation updates are welcome. If behavior changes, update the English README first and then sync translations.
+
+## Acknowledgements And Influences
+
+This repo is its own implementation, but two external projects materially influenced how it evolved:
+
+- [tanweai/pua](https://github.com/tanweai/pua): influenced the project's high-agency debugging style, stronger insistence on verification, and the expectation that agents should not stop at shallow guesses.
+- [garrytan/gstack](https://github.com/garrytan/gstack): influenced the push toward structured roles, workflow-driven delivery, heavier review and QA stages, and treating agentic coding as an operational system rather than a single chat prompt.
+
+Those projects did not just inspire tone. They helped shape the bar for this project's workflow design, execution discipline, and public-facing philosophy.
 
 ## Contributing
 
@@ -263,4 +275,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).

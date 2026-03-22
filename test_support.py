@@ -113,7 +113,7 @@ def build_config(
             fallback=LLMProviderConfig(
                 provider="ollama",
                 base_url="http://localhost:11434/v1",
-                model="qwen2.5:14b",
+                model="qwen3.5:4b",
                 api_key="ollama",
             ),
         ),

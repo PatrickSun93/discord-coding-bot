@@ -6,7 +6,7 @@
 discord:
   token: "${DISCORD_BOT_TOKEN}"
   owner_id: "${DISCORD_OWNER_ID}"
-  channel_id: ""  # optional: restrict to one channel ID, leave empty for all
+  channel_id: "" # optional: restrict to one channel ID, leave empty for all
 
 # ── LLM Router ───────────────────────────────────────
 llm:
@@ -18,7 +18,7 @@ llm:
   fallback:
     provider: "ollama"
     base_url: "http://localhost:11434/v1"
-    model: "qwen2.5:14b"  # run: ollama pull qwen2.5:14b
+    model: "qwen3.5:4b" # run: ollama pull qwen3.5:4b
 
 # ── CLI Agents ───────────────────────────────────────
 cli:
@@ -60,9 +60,9 @@ cli:
 
 # ── Shell ────────────────────────────────────────────
 shell:
-  default: "auto"   # auto | bash | zsh | wsl | powershell | cmd
+  default: "auto" # auto | bash | zsh | wsl | powershell | cmd
   timeout: 300
-  wsl_distro: null  # specific WSL distro, or null for default
+  wsl_distro: null # specific WSL distro, or null for default
 
 # ── Todo Queue ───────────────────────────────────────
 todo:
@@ -73,16 +73,16 @@ todo:
 
 # ── Feature Pipeline ─────────────────────────────────
 pipeline:
-  coder: ""                  # optional explicit coder CLI; otherwise role-based selection
-  reviewers: []              # optional explicit reviewers; otherwise role-based selection
-  tester: ""                 # optional explicit QA/test-analysis CLI
-  test_command: ""           # optional global default test command
-  lint_command: ""           # optional global default lint/smoke command
+  coder: "" # optional explicit coder CLI; otherwise role-based selection
+  reviewers: [] # optional explicit reviewers; otherwise role-based selection
+  tester: "" # optional explicit QA/test-analysis CLI
+  test_command: "" # optional global default test command
+  lint_command: "" # optional global default lint/smoke command
   max_cycles: 10
   auto_pr: true
   pr_tool: "gh"
   base_branch: "main"
-  plan_threshold: "complex"  # always | complex | never
+  plan_threshold: "complex" # always | complex | never
   push_remote: "origin"
 
 # ── Services (managed via shell) ─────────────────────
@@ -164,10 +164,10 @@ workflows: {}
 
 # ── Context Refresh ──────────────────────────────────
 context:
-  max_age_days: 7   # re-run /init if CLAUDE.md older than this
+  max_age_days: 7 # re-run /init if CLAUDE.md older than this
 
 # ── Reporting ────────────────────────────────────────
 reporter:
-  stream_threshold: 30    # seconds before switching to batch mode
-  batch_interval: 15      # seconds between batch progress updates
+  stream_threshold: 30 # seconds before switching to batch mode
+  batch_interval: 15 # seconds between batch progress updates
   max_message_length: 1900

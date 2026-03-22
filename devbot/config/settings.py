@@ -322,7 +322,7 @@ def load_config(path: Optional[Path] = None) -> Config:
         fallback=LLMProviderConfig(
             provider=fallback_data.get("provider", "ollama"),
             base_url=fallback_data.get("base_url", "http://localhost:11434/v1"),
-            model=fallback_data.get("model", "qwen2.5:14b"),
+            model=fallback_data.get("model", "qwen3.5:4b"),
             api_key="ollama",
         ),
     )

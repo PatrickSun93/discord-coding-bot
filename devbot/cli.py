@@ -49,7 +49,7 @@ def cmd_init() -> None:
             "fallback": {
                 "provider": "ollama",
                 "base_url": "http://localhost:11434/v1",
-                "model": "qwen2.5:14b",
+                "model": "qwen3.5:4b",
             },
         },
         "cli": {

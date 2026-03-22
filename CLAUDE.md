@@ -11,12 +11,16 @@ conda activate devbot
 
 # Install / reinstall after dependency changes
 pip install -e .
+pip install -e .[dev]
 
 # Start the bot
 devbot start
 
 # Check local machine health
 devbot doctor
+
+# Repo lint baseline
+ruff check .
 
 # Focused tests
 python test_todo.py
@@ -45,7 +49,7 @@ Implemented and active:
 - Claude Code, Codex, Gemini CLI, and Qwen CLI adapters
 - Project profiles, role registry, workflow registry, and persisted run artifacts
 - Full `feature_delivery` pipeline with branch/create-review-QA-release orchestration
-- Durable workflow step logs in `timeline.md` and `events.jsonl`
+- Durable workflow step logs in `timeline.md` and `events.jsonl` for ad-hoc CLI runs, analysis runs, pipelines, and restart runs
 - `/status` surfaces active pipeline log paths while a pipeline is still running
 - Todo queue from `todos.md` with `!todo add/list/run/status/cancel`
 - Router tools for `run_pipeline` and `todo_add`
@@ -53,6 +57,8 @@ Implemented and active:
 - Manual restart via `!project restart <name>` and `/project restart <name>`
 - Startup machine healthcheck for configured CLIs and LLM backends
 - Shared health reporting in `devbot doctor` and `/doctor`
+- Healthcheck distinguishes install/path failures from account/auth failures such as Gemini Code Assist eligibility rejection
+- Repo lint baseline with `ruff check .` and GitHub Actions automation
 
 Not fully implemented yet:
 - Busy-CLI interactive handling such as assign / hold / skip
@@ -83,6 +89,15 @@ devbot start
   -> log result
   -> start Discord client
   -> on_ready() optionally posts startup healthcheck to configured channel
+```
+
+CI path:
+
+```text
+push / pull_request
+  -> .github/workflows/ruff.yml
+  -> pip install -e .[dev]
+  -> ruff check .
 ```
 
 ## Important Runtime Rules
@@ -205,6 +220,8 @@ Each run persists:
 - stage prompts and outputs
 - diff / QA / release artifacts
 
+This same artifact pattern is also used for ad-hoc CLI runs, analysis runs, and restart runs.
+
 ## Restart Behavior
 
 Manual restart:
@@ -224,6 +241,7 @@ Shared implementation: `devbot/healthcheck.py`
 What it checks:
 - configured CLI commands on `PATH`
 - live CLI prompt probes, so auth/config failures show up as unhealthy instead of “installed”
+- CLI-specific error classification where possible; for example Gemini eligibility/auth rejection is reported as an account problem instead of a generic probe failure
 - MiniMax primary model availability with a small live probe
 - fallback OpenAI-compatible backend availability and configured model presence
 
@@ -255,6 +273,8 @@ Current slash surface:
 
 Use these tests when touching the related subsystems:
 
+- Repo lint baseline:
+  - `ruff check .`
 - Startup and provider healthchecks:
   - `python -m unittest -v test_healthcheck.py`
 - Todo queue, restart, and slash command scenarios:
