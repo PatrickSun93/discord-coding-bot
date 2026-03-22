@@ -1,257 +1,286 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file gives repo-specific guidance to Claude Code when working in this project.
 
 ## Environment
 
-**Conda environment**: `devbot` (Python 3.11)
+Conda environment: `devbot` (Python 3.11)
 
 ```bash
 conda activate devbot
 
-# Install / reinstall after adding dependencies
+# Install / reinstall after dependency changes
 pip install -e .
 
-# Run the bot
+# Start the bot
 devbot start
 
-# First-time setup
-devbot init       # interactive wizard -- writes config to %LOCALAPPDATA%\devbot\devbot\config.yaml
-devbot doctor     # validate CLIs, shells, config, Ollama, Discord token
+# Check local machine health
+devbot doctor
 
-# Smoke tests (no network needed)
-python smoke_test.py    # imports + adapter logic + blocklist + platform detection
-python test_runner.py   # async subprocess runner
+# Focused tests
+python test_todo.py
+python test_auto_restart.py
+python -m unittest -v test_healthcheck.py
+python -m unittest -v test_user_scenarios.py
+python -m unittest -v test_pipeline_workflow.py
+
+# Smoke tests
+python smoke_test.py
+python test_runner.py
+python test_full_pipeline.py
+python test_router_import.py
 ```
 
-The config path on this Windows machine is:
+On this Windows machine the config path is:
 `C:\Users\peido\AppData\Local\devbot\devbot\config.yaml`
 
-Installed CLIs: `claude` (Claude Code), `qwen`, `gemini`. Ollama is running locally. WSL is available.
+## Current State
 
-## Project Status
+Architecture document: `devbot-architecture-v4-final.md`
 
-**Architecture**: v4.3 (`devbot-architecture-v4-final.md`)
+Implemented and active:
+- Discord bot with owner auth and channel restriction support
+- MiniMax primary router with Ollama fallback
+- Claude Code, Codex, Gemini CLI, and Qwen CLI adapters
+- Project profiles, role registry, workflow registry, and persisted run artifacts
+- Full `feature_delivery` pipeline with branch/create-review-QA-release orchestration
+- Durable workflow step logs in `timeline.md` and `events.jsonl`
+- `/status` surfaces active pipeline log paths while a pipeline is still running
+- Todo queue from `todos.md` with `!todo add/list/run/status/cancel`
+- Router tools for `run_pipeline` and `todo_add`
+- Auto-restart after successful code changes when project restart config is present
+- Manual restart via `!project restart <name>` and `/project restart <name>`
+- Startup machine healthcheck for configured CLIs and LLM backends
+- Shared health reporting in `devbot doctor` and `/doctor`
 
-Core foundation is implemented:
-- Discord bot + owner auth + busy gate
-- shell executor + blocklist + WSL/platform detection
-- MiniMax/Ollama router
-- all 4 CLI adapters
-- task history + slash commands
-- generic `read_files` + `analyze_project` tools
-- data-driven project profiles, role registry, and workflow registry
+Not fully implemented yet:
+- Busy-CLI interactive handling such as assign / hold / skip
+- End-to-end Discord integration tests against the live API
 
-Full multi-stage gstack-style orchestration is **not** fully automated yet. The repo now has the extensible foundation for that work.
+## High-Level Flow
 
-| Phase | Status | Contents |
-|-------|--------|----------|
-| 1 Foundation | done | config, Discord bot, project registry |
-| 2 Shell Execution | done | shell executor, blocklist, WSL, platform detection |
-| 3 LLM Router | done | MiniMax + Ollama, dynamic system prompt, 7 tools |
-| 4 CLI Agents | done | all 4 adapters, stream-JSON parser, Codex |
-| 5 Project Mgmt | in progress | project profiles, role/workflow registry, run artifacts |
-| 6 Review Pipeline | next | branch/code/review/test/push/PR loop |
-| 7 Todo Queue | next | todos.md, parallel dispatch, !todo commands |
-| 8 Harness | next | doc gardening, skills system, usage management |
-
-## Architecture
-
-DevBot is a Discord bot that routes natural language messages to coding, shell, file-read, or project-analysis tools.
-A **router LLM** (MiniMax primary, Ollama fallback) classifies intent and dispatches to the right executor.
-
-```
-Discord Message
-  |
-  v
-DevBotClient.on_message  (owner auth + busy check + react 👀)
-  |
-  v
-LLMRouter.route()  (MiniMax -> Ollama fallback, dynamic system prompt)
-  |
-  +--[run_cli]-----> TaskManager.execute() -> CLI Adapter -> run_subprocess()
-  |                      stream-JSON parser -> DiscordStreamer -> Discord
-  |
-  +--[run_shell]---> blocklist check -> run_shell() -> Discord reply
-  |
-  +--[read_context / read_files] -> project docs/files -> Discord reply
-  |
-  +--[analyze_project] -> role-aware prompt builder -> reviewer CLI -> persisted run artifacts
-  |
-  +--[list_projects / ask_clarification / reply] -> Discord reply
-  |
-  v
-React emoji on original message (OK / error / question)
+```text
+Discord message
+  -> DevBotClient.on_message()
+  -> LLMRouter.route() unless intercepted by !todo / !project
+  -> tool dispatch
+     -> run_cli        -> TaskManager -> CLI adapter -> subprocess stream
+     -> run_pipeline   -> FeatureDeliveryPipeline -> branch/code/review/qa/release
+     -> run_shell      -> shell blocklist -> shell executor
+     -> read_context   -> project context loader
+     -> read_files     -> bounded file bundle
+     -> analyze_project -> reviewer-style prompt -> CLI run artifacts
+  -> Discord replies + reactions
 ```
 
-## Module Structure
+Startup path:
 
+```text
+devbot start
+  -> load_config()
+  -> run_machine_healthcheck()
+  -> log result
+  -> start Discord client
+  -> on_ready() optionally posts startup healthcheck to configured channel
 ```
+
+## Important Runtime Rules
+
+- Owner-only bot: only `config.discord.owner_id` is allowed to drive the bot.
+- Ad-hoc CLI work is gated by project and CLI:
+  - one running task per project
+  - one running task per CLI across projects
+- Feature pipelines hold a project-level lock across all internal stages and honor `/cancel`.
+- Todo queue is parallel by CLI, but still prevents two active items on the same project.
+- Manual project restart only accepts a registered project name, not an arbitrary path.
+- Auto-restart is opt-in per project via `auto_restart: true` plus either:
+  - `projects.<name>.commands.restart`
+  - `projects.<name>.restart_service`
+- Manual and auto-restart attempts also persist run artifacts under `.devbot/runs/restart/`
+- Never use `shell=True`; subprocesses must stay argument-based.
+- `cli.py` output must remain ASCII-friendly for Windows terminals.
+- CLI adapters should keep the command shape:
+  - `[command] + base_args + autonomy_args + extra_args + [task]`
+- On Windows, prompt-based `.CMD` wrappers need prompt normalization; keep that behavior intact.
+- On Windows with WSL, `run_shell()` must keep a Windows host `cwd` for `wsl.exe` and do the Linux-side `cd /mnt/...` inside the command.
+- Codex defaults should include `--skip-git-repo-check` so temp repos and scaffolded repos can run without manual trust setup.
+
+## Main Modules
+
+```text
 devbot/
-├── config/
-│   ├── settings.py          # YAML + ${ENV_VAR} interpolation, typed dataclasses
-│   └── default_config.yaml  # Template (v4 format)
 ├── bot/
-│   ├── client.py            # DevBotClient: on_message -> LLM -> dispatch; reaction helpers
-│   ├── commands.py          # Slash commands: /status /cancel /projects /project /config
-│   │                        #   /history /shells /doctor
-│   └── formatter.py         # format_project_list, format_status
-├── llm/
-│   ├── router.py            # LLMRouter: MiniMax -> Ollama fallback, returns ToolDecision
-│   └── tools_schema.py      # Tool defs (ANTHROPIC_TOOLS + TOOLS) + build_system_prompt()
-├── workflow/
-│   ├── default_roles.yaml   # Packaged default role registry
-│   ├── default_workflows.yaml  # Packaged default workflow registry
-│   ├── prompts.py           # Prompt builders for role-based work
-│   ├── registry.py          # Load/merge role + workflow registries
-│   └── store.py             # Persist run artifacts under .devbot/runs/
-├── executor/
-│   ├── manager.py           # TaskManager: single-task gate, run, cancel, returns TaskResult
-│   ├── runner.py            # run_subprocess + kill_process (cross-platform)
-│   ├── stream.py            # DiscordStreamer: real-time (<30s) -> batched (>30s)
-│   ├── stream_parser.py     # Universal NDJSON parser for CLI stream-json output
-│   ├── adapters/
-│   │   ├── base.py          # BaseCLIAdapter ABC: build_command(task, project_path)
-│   │   ├── claude_code.py   # claude -p --output-format stream-json --dangerously-skip-permissions
-│   │   ├── codex.py         # codex exec --json --full-auto
-│   │   ├── gemini_cli.py    # gemini -p --output-format stream-json --yolo
-│   │   └── qwen_cli.py      # qwen -p --output-format stream-json --yolo
-│   └── shell/
-│       ├── __init__.py      # re-exports: is_command_blocked, run_shell, detect_platform
-│       ├── platform.py      # detect_platform(), resolve_shell(), windows_path_to_wsl()
-│       ├── blocklist.py     # BLOCKED_PATTERNS + is_command_blocked()
-│       └── executor.py      # run_shell() -> ShellResult
+│   ├── client.py            # message handling, !todo, !project restart, startup health post
+│   ├── commands.py          # slash commands including /project restart and /doctor
+│   └── formatter.py         # status, project list, todo formatting
+├── config/
+│   ├── settings.py          # typed config loader
+│   └── default_config.yaml  # default template
 ├── context/
-│   ├── project.py           # resolve_project: name or absolute path -> (path, display_name)
-│   ├── loader.py            # load_project_context: reads core context files
-│   └── files.py             # bounded file discovery + analysis file selection
-├── history.py               # SQLite task history: record_task(), get_recent()
-├── cli.py                   # devbot init / doctor / start entry points (ASCII only -- no emojis)
-└── main.py                  # load_config -> DevBotClient -> asyncio.run
+│   ├── project.py           # resolve project names and paths
+│   ├── loader.py            # project context loading
+│   └── files.py             # bounded file selection
+├── executor/
+│   ├── manager.py           # running-task registry and CLI/project busy checks
+│   ├── auto_restart.py      # change detection and restart plan resolution
+│   ├── runner.py            # subprocess execution
+│   ├── stream.py            # Discord streaming
+│   ├── stream_parser.py     # NDJSON/plain-text normalization
+│   ├── adapters/            # Claude/Codex/Gemini/Qwen adapters
+│   └── shell/               # blocklist, platform detection, shell execution
+├── healthcheck.py           # startup and doctor machine/provider healthchecks
+├── llm/
+│   ├── router.py            # MiniMax primary, Ollama fallback
+│   └── tools_schema.py      # router tool definitions and system prompt
+├── todo/
+│   ├── parser.py            # todos.md read/write
+│   ├── validator.py         # CLI/project normalization and validation
+│   ├── executor.py          # queue dispatch and result archiving
+│   ├── archiver.py          # done.md output
+│   └── models.py            # todo dataclasses
+├── workflow/
+│   ├── pipeline.py          # feature-delivery pipeline executor
+│   ├── registry.py          # roles + workflows
+│   ├── prompts.py           # prompt builders
+│   └── store.py             # run artifacts + events under .devbot/runs/
+├── cli.py                   # devbot init / doctor / start
+├── history.py               # sqlite task history
+└── main.py                  # startup entry point
 ```
 
-## Key Design Rules
+## Router and Tools
 
-- **Single task at a time** -- `task_manager.is_busy()` gates all incoming requests
-- **Single-user auth** -- only Discord messages from `config.discord.owner_id` are processed
-- **Never use `shell=True`** -- always `asyncio.create_subprocess_exec(*cmd_list)`
-- **Cross-platform paths** -- `pathlib.Path` everywhere; `shutil.which()` for binary detection
-- **Process termination** -- `terminate()` -> 5s wait -> `kill()` (Unix) / `taskkill /F /PID` (Windows)
-- **No emojis or non-ASCII in `cli.py` output** -- Windows cp1252 terminal; use `[OK]`/`[FAIL]`
-- **No non-ASCII in system prompt strings** -- same reason; use `->` not `->`, `--` not `--`
-- **Emoji reactions on messages** -- 👀 on receipt, then ✅/❌/🤔 on completion; all via `_react()` helper
-- **CLI command format** -- `[cmd] + base_args + autonomy_args + extra_args + [task]`
-- **Stream-JSON output** -- all CLIs run with `--output-format stream-json`; `stream_parser.py` decodes NDJSON to plain text before Discord display
+The router currently exposes 9 tools:
 
-## CLI Agents
+- `run_cli`
+- `run_pipeline`
+- `run_shell`
+- `read_context`
+- `read_files`
+- `analyze_project`
+- `todo_add`
+- `ask_clarification`
+- `list_projects`
 
-Command format per adapter: `[command] + base_args + autonomy_args + extra_args + [task]`
+MiniMax is the primary routing backend. Ollama is the fallback backend. The shared machine healthcheck verifies both using the configured models.
 
-| CLI | Command built |
-|-----|---------------|
-| claude_code | `claude -p --output-format stream-json --dangerously-skip-permissions <task>` |
-| codex | `codex exec --json --full-auto <task>` |
-| gemini_cli | `gemini -p --output-format stream-json --yolo <task>` |
-| qwen_cli | `qwen -p --output-format stream-json --yolo <task>` |
+## Todo Queue
 
-Adapter roles (used by LLM router to pick best fit):
-- **Coders**: `claude_code`, `codex`
-- **Reviewers/Testers**: `gemini_cli`, `qwen_cli`
+Todo items live in `~/.devbot/todos.md` by default.
 
-## LLM Router
+Supported commands:
+- `!todo add <cli> <project> <task>`
+- `!todo add <cli> <project> <task> --priority 1`
+- `!todo list`
+- `!todo run`
+- `!todo status`
+- `!todo cancel`
 
-`LLMRouter.route(user_message)` -> `ToolDecision(tool, args)`.
+Behavior:
+- validates CLI name, project, and local binary availability before queue start
+- runs all tasks in priority order
+- allows parallel work across distinct CLIs
+- prevents concurrent work on the same project
+- executes `pipeline` todo items through the real feature pipeline, not a coder-only shortcut
+- archives completed items to `done.md`
+- converts unexpected runner exceptions into failed archived todo results
 
-**Five tools**: `run_cli`, `run_shell`, `read_context`, `ask_clarification`, `list_projects`.
+## Pipeline Behavior
 
-**System prompt** is built dynamically by `build_system_prompt(config)` and includes:
-- Host OS, available shells, installed CLIs
-- Registered projects list
-- Services table (name -> shell -> commands lookup)
-- Intent-to-tool mapping table (OPERATIONAL / CODE TASK / READ DOCS / LIST / AMBIGUOUS / CHAT)
+`feature_delivery` now runs:
+- branch creation
+- optional planning
+- coder stage
+- optional lint stage
+- commit
+- reviewer CLI stage
+- QA/test stage
+- release/push/PR assessment
 
-Routing strategy is **intent-first**: the LLM classifies intent by keyword signals before picking a tool. This avoids name-collision bugs (e.g. "openclaw" matching both a project and a service).
+Each run persists:
+- `run.json`
+- `timeline.md`
+- `events.jsonl`
+- stage prompts and outputs
+- diff / QA / release artifacts
 
-- **MiniMax**: Anthropic SDK (sync), wrapped in `loop.run_in_executor()`. Tools as `ANTHROPIC_TOOLS`.
-- **Ollama**: `AsyncOpenAI(base_url=http://localhost:11434/v1)`. Tools as `TOOLS` (OpenAI format). 60s timeout.
+## Restart Behavior
 
-## Shell Execution
+Manual restart:
+- `!project restart <name>`
+- `/project restart <name>`
 
-`executor/shell/` handles all non-CLI command execution:
+Auto-restart:
+- runs only after successful code tasks
+- compares project snapshots before and after execution
+- ignores doc-only changes such as `README.md`
+- surfaces restart failure back to Discord and marks todo work failed if the restart step fails
 
-- **`detect_platform()`** -- detects OS, enumerates available shells, sets default (WSL on Windows if available)
-- **`resolve_shell(shell, platform_info)`** -- returns `(cmd_prefix, is_wsl)` for subprocess building
-- **`is_command_blocked(command)`** -- checks against `BLOCKED_PATTERNS` (rm, dd, mkfs, chmod 777, shutdown, etc.), returns `(blocked, reason)`
-- **`run_shell(command, shell, working_dir, timeout)`** -- async, merges stdout+stderr, returns `ShellResult`
-- **WSL path conversion** -- `windows_path_to_wsl("C:\\x")` -> `"/mnt/c/x"` applied automatically when `is_wsl=True`
+## Healthcheck Behavior
 
-Blocked commands are refused with a Discord message; never silently dropped.
+Shared implementation: `devbot/healthcheck.py`
 
-## Configuration (v4)
+What it checks:
+- configured CLI commands on `PATH`
+- live CLI prompt probes, so auth/config failures show up as unhealthy instead of “installed”
+- MiniMax primary model availability with a small live probe
+- fallback OpenAI-compatible backend availability and configured model presence
 
-Config path: `platformdirs.user_config_dir("devbot")` + `/config.yaml`.
-Supports `${ENV_VAR}` interpolation. Per-project `.devbot.yaml` can override `context_files`.
+Where it runs:
+- automatically during `devbot start`
+- manually through `devbot doctor`
+- manually through `/doctor`
 
-Top-level sections:
-
-```yaml
-discord:   token, owner_id, channel_id
-llm:       primary (MiniMax), fallback (Ollama)
-cli:       claude_code, codex, gemini_cli, qwen_cli
-           each has: command, base_args, autonomy_args, extra_args, timeout, enabled, roles
-shell:     default, timeout, wsl_distro
-services:  <name>: {shell, commands: {start, stop, restart, status, logs}}
-context:   max_age_days
-reporter:  stream_threshold, batch_interval, max_message_length
-projects:  <name>: {path, description, context_files}
-```
-
-The loader is backward-compatible: old configs using `args` (instead of `base_args`/`autonomy_args`) still load correctly.
-
-## Streaming
-
-`DiscordStreamer` receives lines from `run_subprocess` via the `stream_parser` wrapper:
-
-1. `run_subprocess()` calls `on_output(raw_line)` for each stdout/stderr line
-2. `make_json_output_handler(streamer.on_output)` wraps it: parses NDJSON events, extracts text, falls back to plain text for non-JSON lines
-3. `DiscordStreamer` adapts:
-   - **0-30s**: edits a single Discord message with the last 15 output lines
-   - **>30s**: posts batch summaries every 15s
-   - **On finish**: `send_result()` posts a rich embed; `TaskManager.execute()` returns the returncode
-
-## Discord Reactions
-
-`client.py` uses three helpers: `_react(message, emoji)`, `_clear_reaction(message, emoji, me)`.
-
-| State | Reaction |
-|-------|----------|
-| Message received, routing | 👀 |
-| Task/shell success | 👀 removed, ✅ added |
-| Task/shell failure | 👀 removed, ❌ added |
-| Clarification asked | 👀 removed, 🤔 added |
-| Project/CLI not found | 👀 removed, ❌ added |
-
-All reaction calls are try/except -- missing `Add Reactions` permission does not crash the bot.
+Startup reporting:
+- logged in the terminal every start
+- posted once to the configured Discord channel if `discord.channel_id` is set
 
 ## Slash Commands
 
-| Command | Description |
-|---------|-------------|
-| `/status` | Show running task info |
-| `/cancel` | Kill running task |
-| `/projects` | List registered projects |
-| `/project add <name> <path>` | Register a project (in-memory) |
-| `/config reload` | Hot-reload config from disk |
-| `/history` | Last 10 tasks from SQLite history |
-| `/shells` | OS + available shells + default |
-| `/doctor` | Check CLIs, gh, docker, WSL inline |
+Current slash surface:
+- `/status`
+- `/cancel`
+- `/projects`
+- `/project add <name> <path>`
+- `/project restart <name>`
+- `/config reload`
+- `/history`
+- `/shells`
+- `/doctor`
+- `/roles`
+- `/workflows`
+
+## Test Guidance
+
+Use these tests when touching the related subsystems:
+
+- Startup and provider healthchecks:
+  - `python -m unittest -v test_healthcheck.py`
+- Todo queue, restart, and slash command scenarios:
+  - `python -m unittest -v test_user_scenarios.py`
+- Pipeline orchestration and durable workflow logs:
+  - `python -m unittest -v test_pipeline_workflow.py`
+- Todo queue focused coverage:
+  - `python test_todo.py`
+- Restart focused coverage:
+  - `python test_auto_restart.py`
+- Broad local regression:
+  - `python smoke_test.py`
+  - `python test_runner.py`
+  - `python -m unittest -v test_shell_executor.py`
+  - `python test_full_pipeline.py`
+  - `python test_router_import.py`
+
+Do not rely on `test_minimax.py` for normal local regression; it is a live network check.
+Do not rely on `test_projects.py` unless the local machine-specific project registry is expected to match.
 
 ## Dependencies
 
-```
+```text
 discord.py>=2.3
-anthropic>=0.40    # MiniMax via Anthropic SDK (sync, thread-pool-wrapped)
-openai>=1.0        # Ollama via OpenAI-compat (async)
+anthropic>=0.40
+openai>=1.0
 httpx>=0.27
 pyyaml>=6.0
 platformdirs>=4.0

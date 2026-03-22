@@ -7,6 +7,7 @@ import logging
 import signal
 import sys
 
+from devbot.healthcheck import HealthCheckItem, HealthReport, format_health_report, run_machine_healthcheck
 from devbot.config.settings import load_config
 from devbot.bot.client import DevBotClient
 
@@ -26,7 +27,28 @@ logging.getLogger("discord.client").addFilter(_NoVoiceWarning())
 
 
 async def _run(config) -> None:
+    try:
+        report = await run_machine_healthcheck(config)
+    except Exception as exc:
+        logger.exception("Startup healthcheck crashed: %s", exc)
+        report = HealthReport(
+            items=[
+                HealthCheckItem(
+                    name="Startup Healthcheck",
+                    status="fail",
+                    detail=f"healthcheck crashed: {exc}",
+                    critical=False,
+                )
+            ]
+        )
+
+    if report.has_failures():
+        logger.warning("Startup healthcheck found issues:\n%s", format_health_report(report, markdown=False))
+    else:
+        logger.info("Startup healthcheck passed:\n%s", format_health_report(report, markdown=False))
+
     client = DevBotClient(config)
+    client._startup_health_report = report
 
     # Register SIGTERM handler on platforms that support it (Unix only).
     # SIGINT (Ctrl+C) is handled by discord.py itself on all platforms.

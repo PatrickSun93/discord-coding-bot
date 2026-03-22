@@ -22,6 +22,7 @@ async def run_subprocess(
             cwd=cwd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            limit=1024 * 1024,
         )
     except FileNotFoundError:
         await on_output(f"[error] Command not found: {cmd[0]!r} — is it installed and on PATH?")
@@ -31,9 +32,21 @@ async def run_subprocess(
         on_process(process)
 
     async def read_stream(stream: asyncio.StreamReader, prefix: str = "") -> None:
-        async for raw in stream:
-            line = raw.decode(errors="replace").rstrip()
-            await on_output(prefix + line)
+        buffer = ""
+        while True:
+            raw = await stream.read(65536)
+            if not raw:
+                break
+            buffer += raw.decode(errors="replace")
+            while True:
+                newline = buffer.find("\n")
+                if newline < 0:
+                    break
+                line = buffer[:newline].rstrip("\r")
+                buffer = buffer[newline + 1 :]
+                await on_output(prefix + line)
+        if buffer:
+            await on_output(prefix + buffer.rstrip("\r"))
 
     try:
         await asyncio.wait_for(

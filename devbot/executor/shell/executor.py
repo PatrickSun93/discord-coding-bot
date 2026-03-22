@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import shlex
 from dataclasses import dataclass
+from pathlib import Path
 
 from devbot.executor.shell.platform import PlatformInfo, resolve_shell
 
@@ -47,16 +49,20 @@ async def run_shell(
     resolved_shell = shell if shell != "auto" else platform_info.default_shell
 
     # For WSL, convert Windows working dir to WSL path
-    cwd = working_dir
+    cwd = str(Path(working_dir).resolve()) if working_dir else None
+    wsl_cwd = None
     if is_wsl and cwd:
-        cwd = windows_path_to_wsl(cwd)
+        wsl_cwd = windows_path_to_wsl(cwd)
 
     # Build the subprocess args
     # For shells that take -c <command_string>, we use prefix + [command]
     # For WSL, the command is passed directly as args
     if is_wsl:
         # Use bash -ic so .bashrc is sourced — npm globals, nvm, etc. are on PATH
-        cmd_args = prefix + ["bash", "-ic", command]
+        shell_command = command
+        if wsl_cwd:
+            shell_command = f"cd {shlex.quote(wsl_cwd)} && {command}"
+        cmd_args = prefix + ["bash", "-ic", shell_command]
     elif resolved_shell in ("powershell", "cmd"):
         # powershell -Command <cmd> or cmd /c <cmd>
         cmd_args = prefix + [command]

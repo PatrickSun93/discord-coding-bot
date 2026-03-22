@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import platform
 import shutil
+import sys
 from pathlib import Path
 
 from devbot.executor.runner import run_subprocess
@@ -30,6 +31,13 @@ async def main():
 
     try:
         rc = await run_subprocess(cmd, cwd=str(workdir), on_output=capture, timeout=10)
+        long_lines: list[str] = []
+
+        async def capture_long(line: str):
+            long_lines.append(line)
+
+        long_cmd = [sys.executable, "-c", "print('x' * 70000)"]
+        long_rc = await run_subprocess(long_cmd, cwd=str(workdir), on_output=capture_long, timeout=10)
     except PermissionError as exc:
         print(f"runner test skipped due to sandbox permission error: {exc}")
         return
@@ -38,7 +46,9 @@ async def main():
 
     print(f"Exit code: {rc}")
     assert rc == 0, f"Expected 0, got {rc}"
+    assert long_rc == 0, f"Expected long-line command to succeed, got {long_rc}"
     assert any("hello" in l for l in lines), f"Expected output, got: {lines}"
+    assert any(len(line) >= 70000 for line in long_lines), "Expected to capture the long output line."
     print("runner test passed.")
 
 

@@ -21,4 +21,10 @@ class QwenCLIAdapter(BaseCLIAdapter):
         self.extra_args = extra_args or []
 
     def build_command(self, task: str, project_path: str) -> list[str]:
-        return [self.command] + self.base_args + self.autonomy_args + self.extra_args + [task]
+        task_arg = self.prepare_task_argument(task)
+        args = list(self.base_args)
+        for index, token in enumerate(args):
+            if token in {"-p", "--prompt"}:
+                args.insert(index + 1, task_arg)
+                return [self.resolved_command()] + args + self.autonomy_args + self.extra_args
+        return [self.resolved_command()] + args + self.autonomy_args + self.extra_args + [task_arg]

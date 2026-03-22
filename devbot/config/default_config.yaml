@@ -35,7 +35,7 @@ cli:
     command: "codex"
     base_args: ["exec", "--json"]
     autonomy_args: ["--full-auto"]
-    extra_args: []
+    extra_args: ["--skip-git-repo-check"]
     timeout: 600
     enabled: true
     roles: ["coder"]
@@ -64,6 +64,27 @@ shell:
   timeout: 300
   wsl_distro: null  # specific WSL distro, or null for default
 
+# ── Todo Queue ───────────────────────────────────────
+todo:
+  file: "~/.devbot/todos.md"
+  done_file: "~/.devbot/done.md"
+  auto_start: false
+  busy_cli_timeout: 300
+
+# ── Feature Pipeline ─────────────────────────────────
+pipeline:
+  coder: ""                  # optional explicit coder CLI; otherwise role-based selection
+  reviewers: []              # optional explicit reviewers; otherwise role-based selection
+  tester: ""                 # optional explicit QA/test-analysis CLI
+  test_command: ""           # optional global default test command
+  lint_command: ""           # optional global default lint/smoke command
+  max_cycles: 10
+  auto_pr: true
+  pr_tool: "gh"
+  base_branch: "main"
+  plan_threshold: "complex"  # always | complex | never
+  push_remote: "origin"
+
 # ── Services (managed via shell) ─────────────────────
 # Named services with pre-configured shell commands.
 # The LLM will use these exact commands when you say "restart openclaw" etc.
@@ -83,6 +104,8 @@ projects: {}
 #    path: "/home/user/projects/myapp"
 #    type: "webapp"
 #    description: "Main web application"
+#    auto_restart: true
+#    restart_service: "myapp"   # optional: reuse services.myapp.commands.restart
 #    context_files: ["CLAUDE.md", "AGENTS.md", "README.md"]
 #    docs:
 #      product: ["README.md", "docs/product/**/*.md"]
@@ -93,6 +116,8 @@ projects: {}
 #      test: "npm test"
 #      smoke: ["npm run lint", "npm run test:smoke"]
 #      run: "npm run dev"
+#      restart: "docker compose restart web"
+#      restart_shell: "wsl"
 #    qa:
 #      kind: "web"
 #      smoke_commands: ["npm run test:e2e"]
@@ -101,6 +126,18 @@ projects: {}
 #      entry_files: ["ARCHITECTURE.md", "docs/current-workflow.md"]
 #      doc_globs: ["docs/**/*.md", "*.md"]
 #      preferred_reviewer_cli: "gemini_cli"
+#    pipeline:
+#      coder: "codex"
+#      reviewers: ["gemini_cli", "qwen_cli"]
+#      tester: "gemini_cli"
+#      test_command: "pytest -q"
+#      lint_command: "ruff check . && pytest -q tests/smoke"
+#      max_cycles: 5
+#      auto_pr: true
+#      pr_tool: "gh"
+#      base_branch: "main"
+#      plan_threshold: "always"
+#      push_remote: "origin"
 #    role_preferences:
 #      planner: "gemini_cli"
 #      coder: "claude_code"

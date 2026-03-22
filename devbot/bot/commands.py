@@ -8,9 +8,11 @@ from typing import TYPE_CHECKING
 import discord
 from discord import app_commands
 
-from devbot.bot.formatter import format_project_list, format_status
+from devbot.bot.formatter import format_combined_status, format_project_list
 from devbot.executor.manager import TaskManager
+from devbot.healthcheck import format_health_report, run_machine_healthcheck
 from devbot.llm.router import LLMRouter
+from devbot.todo import TodoExecutor
 from devbot.workflow.registry import load_role_registry, load_workflow_registry
 
 if TYPE_CHECKING:
@@ -24,7 +26,11 @@ def register_commands(bot: "DevBotClient") -> None:
 
     @tree.command(name="status", description="Show all currently running tasks.")
     async def status_cmd(interaction: discord.Interaction) -> None:
-        msg = format_status(bot.task_manager.all_tasks())
+        msg = format_combined_status(
+            bot.task_manager.all_tasks(),
+            bot.todo_executor.status(),
+            bot.active_pipeline_statuses(),
+        )
         await interaction.response.send_message(msg, ephemeral=True)
 
     @tree.command(name="cancel", description="Cancel a running task. Omit project to cancel all.")
@@ -34,9 +40,14 @@ def register_commands(bot: "DevBotClient") -> None:
             await interaction.response.send_message("⛔ Not authorized.", ephemeral=True)
             return
         project_arg = project.strip() or None
-        cancelled = await bot.task_manager.cancel(project_arg)
+        task_cancelled = await bot.task_manager.cancel(project_arg)
+        pipeline_cancelled = bot.request_pipeline_cancel(project_arg)
+        todo_cancelled = False
+        if project_arg is None:
+            todo_cancelled = await bot.todo_executor.cancel()
+        cancelled = task_cancelled or pipeline_cancelled or todo_cancelled
         if cancelled:
-            target = f"`{project_arg}`" if project_arg else "all tasks"
+            target = f"`{project_arg}`" if project_arg else "all tasks and queue work"
             await interaction.response.send_message(f"🛑 Cancelled {target}.", ephemeral=False)
         else:
             await interaction.response.send_message("Nothing is running.", ephemeral=True)
@@ -67,6 +78,25 @@ def register_commands(bot: "DevBotClient") -> None:
             f"✅ Project **{name}** registered at `{path}`.", ephemeral=False
         )
 
+    @project_group.command(name="restart", description="Restart a configured project service.")
+    @app_commands.describe(name="Registered project name")
+    async def project_restart(interaction: discord.Interaction, name: str) -> None:
+        if interaction.user.id != bot.config.discord.owner_id:
+            await interaction.response.send_message("⛔ Not authorized.", ephemeral=True)
+            return
+
+        resolved = bot._resolve_registered_project(name)
+        if resolved is None:
+            await interaction.response.send_message(
+                bot._restart_project_resolution_error(name),
+                ephemeral=True,
+            )
+            return
+
+        project_path, project_name = resolved
+        success, reply = await bot._restart_project_now(project_name, project_path)
+        await interaction.response.send_message(reply, ephemeral=not success)
+
     tree.add_command(project_group)
 
     config_group = app_commands.Group(name="config", description="Bot configuration.")
@@ -80,6 +110,7 @@ def register_commands(bot: "DevBotClient") -> None:
             from devbot.config.settings import load_config
             bot.config = load_config()
             bot.task_manager = TaskManager(bot.config)
+            bot.todo_executor = TodoExecutor(bot.config, bot.task_manager)
             bot.llm_router = LLMRouter(bot.config)
             # Re-detect platform in case shell config changed
             from devbot.executor.shell.platform import detect_platform
@@ -135,19 +166,11 @@ def register_commands(bot: "DevBotClient") -> None:
             await interaction.response.send_message("⛔ Not authorized.", ephemeral=True)
             return
 
-        import shutil
-        lines: list[str] = ["**DevBot Doctor**"]
+        await interaction.response.defer(ephemeral=True, thinking=True)
 
-        # CLIs
-        for cli_key, binary in [
-            ("claude_code", "claude"),
-            ("codex", "codex"),
-            ("gemini_cli", "gemini"),
-            ("qwen_cli", "qwen"),
-        ]:
-            found = shutil.which(binary)
-            icon = "✅" if found else "⚠️"
-            lines.append(f"{icon} `{binary}`: {'found' if found else 'not on PATH'}")
+        import shutil
+        report = await run_machine_healthcheck(bot.config)
+        lines: list[str] = [format_health_report(report, title="DevBot Doctor")]
 
         # gh CLI
         gh = shutil.which("gh")
@@ -168,7 +191,7 @@ def register_commands(bot: "DevBotClient") -> None:
         # Projects
         lines.append(f"📁 Registered projects: {len(bot.config.projects)}")
 
-        await interaction.response.send_message("\n".join(lines), ephemeral=True)
+        await interaction.followup.send("\n".join(lines), ephemeral=True)
 
     @tree.command(name="roles", description="List workflow roles and their preferred CLIs.")
     async def roles_cmd(interaction: discord.Interaction) -> None:

@@ -27,6 +27,9 @@ class TaskInfo:
     cli_name: str
     project: str
     task: str
+    workflow: str = ""
+    run_id: str = ""
+    log_path: str = ""
     started_at: float = field(default_factory=time.monotonic)
     process: Any = None
 
@@ -59,6 +62,17 @@ class TaskManager:
             return self._tasks.get(project)
         return next(iter(self._tasks.values()), None)
 
+    def is_cli_busy(self, cli_name: str) -> bool:
+        """Return True if any running task is using the given CLI."""
+        return self.current_cli_info(cli_name) is not None
+
+    def current_cli_info(self, cli_name: str) -> TaskInfo | None:
+        """Return the first running TaskInfo for a given CLI, if any."""
+        for info in self._tasks.values():
+            if info.cli_name == cli_name:
+                return info
+        return None
+
     def all_tasks(self) -> dict[str, TaskInfo]:
         """Return a snapshot of all currently running tasks keyed by project name."""
         return dict(self._tasks)
@@ -70,12 +84,22 @@ class TaskManager:
         project_path: str,
         project_name: str,
         channel: discord.abc.Messageable,
+        workflow: str = "",
+        run_id: str = "",
+        log_path: str = "",
     ) -> TaskResult:
         if self.is_busy(project_name):
             raise RuntimeError(f"A task is already running for project '{project_name}'.")
 
         cmd = adapter.build_command(task, project_path)
-        info = TaskInfo(cli_name=adapter.name, project=project_name, task=task)
+        info = TaskInfo(
+            cli_name=adapter.name,
+            project=project_name,
+            task=task,
+            workflow=workflow,
+            run_id=run_id,
+            log_path=log_path,
+        )
         self._tasks[project_name] = info
 
         streamer = DiscordStreamer(

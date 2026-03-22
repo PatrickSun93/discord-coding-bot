@@ -30,6 +30,10 @@ def build_project_profile_summary(project_name: str, project_cfg: "ProjectConfig
         lines.append(f"Test command: {project_cfg.commands.test}")
     if project_cfg.commands.run:
         lines.append(f"Run command: {project_cfg.commands.run}")
+    if project_cfg.auto_restart:
+        lines.append("Auto restart: enabled")
+    if project_cfg.commands.restart:
+        lines.append(f"Restart command: {project_cfg.commands.restart}")
     if project_cfg.qa.smoke_commands:
         lines.append(f"QA smoke commands: {', '.join(project_cfg.qa.smoke_commands)}")
     if project_cfg.role_preferences:
