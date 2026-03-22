@@ -350,9 +350,12 @@ async def _probe_cli_health(
         return HealthCheckItem(
             name=label,
             status="fail",
-            detail=(
-                f"`{cli_cfg.command}` found at `{resolved_path}` but live probe failed: "
-                f"{_short_error(RuntimeError(output or f'exit {process.returncode}'))}"
+            detail=_format_cli_probe_failure(
+                cli_key=cli_key,
+                command=cli_cfg.command,
+                resolved_path=resolved_path,
+                output=output,
+                returncode=process.returncode,
             ),
             critical=True,
         )
@@ -374,6 +377,46 @@ def _short_error(error: Exception) -> str:
     if not message:
         return error.__class__.__name__
     return message.replace("\n", " ")[:220]
+
+
+def _format_cli_probe_failure(
+    *,
+    cli_key: str,
+    command: str,
+    resolved_path: str,
+    output: str,
+    returncode: int,
+) -> str:
+    raw = output or f"exit {returncode}"
+    if cli_key == "gemini_cli":
+        return _format_gemini_probe_failure(
+            command=command,
+            resolved_path=resolved_path,
+            output=raw,
+        )
+    return f"`{command}` found at `{resolved_path}` but live probe failed: {_short_error(RuntimeError(raw))}"
+
+
+def _format_gemini_probe_failure(*, command: str, resolved_path: str, output: str) -> str:
+    lowered = output.lower()
+    prefix = f"`{command}` found at `{resolved_path}` but live probe failed: "
+    if "restricted_age" in lowered or "18 years old or older" in lowered:
+        return (
+            prefix
+            + "Google rejected the cached Gemini Code Assist for individuals account "
+            + "(reason: RESTRICTED_AGE / age verification). The CLI is installed, but this "
+            + "account is not eligible. Re-run `gemini` and sign in with an eligible 18+ "
+            + "personal Google account, or switch to Gemini API key / Standard / Enterprise auth."
+        )
+    if "ineligibletiererror" in lowered:
+        return (
+            prefix
+            + "Google rejected the cached Gemini Code Assist for individuals account. "
+            + "The CLI is installed, but this account is not eligible for the current Gemini "
+            + "auth flow. Re-run `gemini` with an eligible account or use Gemini API key / "
+            + "Standard / Enterprise auth."
+        )
+    return prefix + _short_error(RuntimeError(output))
 
 
 def _first_output_line(output: str) -> str:

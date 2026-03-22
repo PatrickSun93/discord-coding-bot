@@ -15,6 +15,7 @@ from devbot.bot.client import DevBotClient
 from devbot.healthcheck import (
     HealthCheckItem,
     HealthReport,
+    _format_cli_probe_failure,
     format_health_report,
     run_machine_healthcheck,
 )
@@ -138,6 +139,23 @@ class HealthcheckTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(channel.messages), 1)
         self.assertIn("Startup Healthcheck", channel.messages[0])
         self.assertIn("MiniMax unavailable", channel.messages[0])
+
+    async def test_gemini_probe_failure_is_rephrased_as_account_eligibility_issue(self) -> None:
+        detail = _format_cli_probe_failure(
+            cli_key="gemini_cli",
+            command="gemini",
+            resolved_path="C:/Program Files/nodejs/gemini.CMD",
+            output=(
+                "Error authenticating: IneligibleTierError: Your current account is not eligible "
+                "for Gemini Code Assist for individuals. reasonCode: 'RESTRICTED_AGE'. "
+                "To use Gemini Code Assist for individuals you must be 18 years old or older."
+            ),
+            returncode=1,
+        )
+
+        self.assertIn("Google rejected the cached Gemini Code Assist", detail)
+        self.assertIn("RESTRICTED_AGE", detail)
+        self.assertIn("Gemini API key / Standard / Enterprise auth", detail)
 
 
 if __name__ == "__main__":
