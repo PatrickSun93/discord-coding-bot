@@ -1,5 +1,6 @@
+from devbot.config.settings import ServiceConfig, load_config
 from devbot.llm.tools_schema import build_system_prompt
-from devbot.config.settings import load_config, ServiceConfig
+
 cfg = load_config()
 cfg.services['openclaw'] = ServiceConfig(
     shell='wsl',

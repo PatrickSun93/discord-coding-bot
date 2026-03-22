@@ -11,17 +11,25 @@ from typing import TYPE_CHECKING
 import discord
 
 from devbot.bot.commands import register_commands
-from devbot.bot.formatter import format_project_list, format_todo_list, format_todo_status
-from devbot.context.files import build_file_bundle, resolve_project_files, select_analysis_files
+from devbot.bot.formatter import (
+    format_project_list,
+    format_todo_list,
+    format_todo_status,
+)
+from devbot.context.files import (
+    build_file_bundle,
+    resolve_project_files,
+    select_analysis_files,
+)
 from devbot.context.loader import load_project_context
 from devbot.context.project import resolve_project
+from devbot.executor.adapters.factory import build_adapter
 from devbot.executor.auto_restart import (
     AutoRestartResult,
     capture_project_snapshot,
     detect_restart_relevant_changes,
     resolve_auto_restart_plan,
 )
-from devbot.executor.adapters.factory import build_adapter
 from devbot.executor.manager import TaskManager
 from devbot.executor.shell import is_command_blocked, run_shell
 from devbot.executor.shell.platform import detect_platform
@@ -37,9 +45,9 @@ from devbot.todo import (
     parse_todo_file,
     prepare_todo_item,
 )
-from devbot.workflow.prompts import build_analysis_prompt, build_cli_task_prompt
 from devbot.workflow.models import ActiveWorkflowStatus
 from devbot.workflow.pipeline import FeatureDeliveryPipeline
+from devbot.workflow.prompts import build_analysis_prompt, build_cli_task_prompt
 from devbot.workflow.registry import select_cli_for_role
 from devbot.workflow.store import (
     append_workflow_event,
@@ -1348,7 +1356,6 @@ class DevBotClient(discord.Client):
             preferred_cli=reviewer_cli,
         )
         # Fall back through available CLIs: selected -> claude_code -> others
-        cli_cfg = None
         adapter = None
         for candidate in [cli_key, "claude_code", "gemini_cli", "qwen_cli"]:
             _cfg = getattr(self.config.cli, candidate, None)
@@ -1358,7 +1365,6 @@ class DevBotClient(discord.Client):
                     if candidate != cli_key:
                         logger.warning("CLI %s unavailable, fell back to %s", cli_key, candidate)
                     cli_key = candidate
-                    cli_cfg = _cfg
                     adapter = _adapter
                     break
 

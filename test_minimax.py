@@ -1,7 +1,9 @@
 """Test MiniMax API call via Anthropic SDK with the current config."""
 import asyncio
+
 from devbot.config.settings import load_config
 from devbot.llm.router import LLMRouter
+
 
 async def main():
     cfg = load_config()

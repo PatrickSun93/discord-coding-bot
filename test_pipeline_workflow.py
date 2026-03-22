@@ -10,8 +10,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
-from devbot.bot.formatter import format_combined_status
 from devbot.bot.client import DevBotClient
+from devbot.bot.formatter import format_combined_status
 from devbot.executor.manager import TaskResult
 from devbot.executor.shell import run_shell
 from devbot.executor.shell.platform import detect_platform

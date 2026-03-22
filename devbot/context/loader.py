@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from devbot.config.settings import Config, ProjectConfig
+    from devbot.config.settings import Config
 
 
 _DEFAULT_CONTEXT_FILES = [

@@ -261,6 +261,8 @@ Use these tests when touching the related subsystems:
   - `python -m unittest -v test_user_scenarios.py`
 - Pipeline orchestration and durable workflow logs:
   - `python -m unittest -v test_pipeline_workflow.py`
+- Repo lint baseline:
+  - `ruff check .`
 - Todo queue focused coverage:
   - `python test_todo.py`
 - Restart focused coverage:

@@ -7,7 +7,6 @@ from devbot.executor.adapters.codex import CodexAdapter
 from devbot.executor.adapters.gemini_cli import GeminiCLIAdapter
 from devbot.executor.adapters.qwen_cli import QwenCLIAdapter
 
-
 _ADAPTER_CLASSES = {
     "claude_code": ClaudeCodeAdapter,
     "codex": CodexAdapter,

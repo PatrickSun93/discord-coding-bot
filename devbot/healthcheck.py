@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 import anthropic
 from openai import AsyncOpenAI
+
 from devbot.executor.adapters.factory import build_adapter
 
 if TYPE_CHECKING:

@@ -5,23 +5,26 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-from devbot.config.settings import _default_config_path
-from devbot.context.files import build_file_bundle, resolve_project_files, select_analysis_files
+from devbot.config.settings import _default_config_path, load_config
+from devbot.context.files import (
+    build_file_bundle,
+    resolve_project_files,
+    select_analysis_files,
+)
+from devbot.context.loader import load_project_context
+from devbot.context.project import resolve_project
 from devbot.executor.adapters.claude_code import ClaudeCodeAdapter
 from devbot.executor.adapters.codex import CodexAdapter
 from devbot.executor.adapters.gemini_cli import GeminiCLIAdapter
 from devbot.executor.adapters.qwen_cli import QwenCLIAdapter
-from devbot.executor.shell.blocklist import is_command_blocked
-from devbot.executor.shell.platform import detect_platform, windows_path_to_wsl
-from devbot.llm.tools_schema import ANTHROPIC_TOOLS, TOOLS, build_system_prompt
-from devbot.context.loader import load_project_context
-from devbot.context.project import resolve_project
-from devbot.config.settings import load_config
 from devbot.executor.auto_restart import (
     capture_project_snapshot,
     detect_restart_relevant_changes,
     resolve_auto_restart_plan,
 )
+from devbot.executor.shell.blocklist import is_command_blocked
+from devbot.executor.shell.platform import detect_platform, windows_path_to_wsl
+from devbot.llm.tools_schema import ANTHROPIC_TOOLS, TOOLS, build_system_prompt
 from devbot.todo import TodoItem, add_todo_item, parse_todo_file, prepare_todo_item
 from devbot.workflow.registry import (
     load_role_registry,

@@ -8,7 +8,6 @@ from pathlib import Path
 from devbot.todo.models import TodoItem
 from devbot.todo.validator import display_todo_cli
 
-
 _SECTION_RE = re.compile(r"^##\s+Priority\s+(\d+)(?:\s+[—-]\s+.*)?\s*$")
 _ITEM_RE = re.compile(
     r"^- \[(?P<done>[ xX])\]\s+`(?P<cli>[^`]+)`\s+\|\s+`(?P<project>[^`]+)`\s+\|\s+(?P<task>.+?)\s*$"

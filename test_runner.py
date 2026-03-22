@@ -47,7 +47,7 @@ async def main():
     print(f"Exit code: {rc}")
     assert rc == 0, f"Expected 0, got {rc}"
     assert long_rc == 0, f"Expected long-line command to succeed, got {long_rc}"
-    assert any("hello" in l for l in lines), f"Expected output, got: {lines}"
+    assert any("hello" in line for line in lines), f"Expected output, got: {lines}"
     assert any(len(line) >= 70000 for line in long_lines), "Expected to capture the long output line."
     print("runner test passed.")
 

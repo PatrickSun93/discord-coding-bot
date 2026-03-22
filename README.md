@@ -53,6 +53,12 @@ conda activate devbot
 pip install -e .
 ```
 
+For local development tooling:
+
+```bash
+pip install -e .[dev]
+```
+
 ## Setup
 
 ```bash
@@ -248,6 +254,7 @@ python -m unittest -v test_healthcheck.py      # startup and provider healthchec
 python -m unittest -v test_user_scenarios.py  # queue, restart, and slash-command scenarios
 python -m unittest -v test_pipeline_workflow.py  # pipeline orchestration + durable log coverage
 python -m unittest -v test_shell_executor.py  # Windows/WSL shell cwd integration
+ruff check .                                  # repo lint baseline (also runs in GitHub Actions)
 ```
 
 ## Contributing

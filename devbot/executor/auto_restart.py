@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
-import os
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:

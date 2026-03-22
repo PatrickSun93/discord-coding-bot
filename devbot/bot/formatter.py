@@ -4,14 +4,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import discord
-
 from devbot.todo.models import TodoItem, TodoQueueStatus
 from devbot.todo.validator import display_todo_cli
 from devbot.workflow.models import ActiveWorkflowStatus
 
 if TYPE_CHECKING:
-    from devbot.config.settings import Config
+    pass
 
 
 def format_project_list(projects: dict) -> str:

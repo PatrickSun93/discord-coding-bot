@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 import discord
 
-from devbot.executor.runner import run_subprocess, kill_process
+from devbot.executor.runner import kill_process, run_subprocess
 from devbot.executor.stream import DiscordStreamer
 from devbot.executor.stream_parser import make_json_output_handler
 from devbot.history import record_task

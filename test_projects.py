@@ -1,6 +1,7 @@
 """Verify all 14 projects load from config and their paths exist on disk."""
-from devbot.config.settings import load_config
 from pathlib import Path
+
+from devbot.config.settings import load_config
 
 cfg = load_config()
 

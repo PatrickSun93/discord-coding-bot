@@ -16,7 +16,13 @@ from devbot.bot.client import DevBotClient
 from devbot.config.settings import ServiceConfig
 from devbot.executor.auto_restart import capture_project_snapshot
 from devbot.executor.manager import TaskInfo, TaskManager
-from devbot.todo import TodoExecutor, TodoItem, TodoRunResult, add_todo_item, parse_todo_file
+from devbot.todo import (
+    TodoExecutor,
+    TodoItem,
+    TodoRunResult,
+    add_todo_item,
+    parse_todo_file,
+)
 from test_support import (
     FakeChannel,
     FakeInteraction,

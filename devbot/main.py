@@ -7,9 +7,14 @@ import logging
 import signal
 import sys
 
-from devbot.healthcheck import HealthCheckItem, HealthReport, format_health_report, run_machine_healthcheck
-from devbot.config.settings import load_config
 from devbot.bot.client import DevBotClient
+from devbot.config.settings import load_config
+from devbot.healthcheck import (
+    HealthCheckItem,
+    HealthReport,
+    format_health_report,
+    run_machine_healthcheck,
+)
 
 logging.basicConfig(
     level=logging.INFO,

@@ -1,7 +1,7 @@
 """Verify router and tools_schema import cleanly after refactor."""
 
-from devbot.llm.tools_schema import ANTHROPIC_TOOLS, TOOLS, ROUTER_SYSTEM_PROMPT
 from devbot.llm.router import LLMRouter
+from devbot.llm.tools_schema import ANTHROPIC_TOOLS, ROUTER_SYSTEM_PROMPT, TOOLS
 
 # Anthropic tools format check
 assert len(ANTHROPIC_TOOLS) == 9

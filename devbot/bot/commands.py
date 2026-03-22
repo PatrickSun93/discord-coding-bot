@@ -66,6 +66,7 @@ def register_commands(bot: "DevBotClient") -> None:
             await interaction.response.send_message("⛔ Not authorized.", ephemeral=True)
             return
         from pathlib import Path
+
         from devbot.config.settings import ProjectConfig
         p = Path(path)
         if not p.exists() or not p.is_dir():
@@ -130,8 +131,9 @@ def register_commands(bot: "DevBotClient") -> None:
             await interaction.response.send_message("⛔ Not authorized.", ephemeral=True)
             return
         try:
-            from devbot.history import get_recent
             import time as _time
+
+            from devbot.history import get_recent
             records = get_recent(10)
         except Exception as exc:
             await interaction.response.send_message(f"❌ Could not load history: {exc}", ephemeral=True)

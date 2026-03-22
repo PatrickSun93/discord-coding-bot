@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import platform
 import subprocess
-from collections.abc import Callable, Awaitable
+from collections.abc import Awaitable, Callable
 
 
 async def run_subprocess(
